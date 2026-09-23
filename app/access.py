@@ -25,25 +25,35 @@ def topic_open(user: str, topic: Topic) -> bool:
     return topic.share_status == "shared"
 
 
+def _parent_visible(user: str, obj: Writing | Comment) -> bool:
+    topic = getattr(obj, "topic", None)
+    return True if topic is None else topic_visible(user, topic)
+
+
+def _parent_open(user: str, obj: Writing | Comment) -> bool:
+    topic = getattr(obj, "topic", None)
+    return True if topic is None else topic_open(user, topic)
+
+
 def writing_visible(user: str, writing: Writing) -> bool:
     if writing.author == user:
         return True
-    return writing.share_status in {"offered", "shared"}
+    return _parent_visible(user, writing) and writing.share_status in {"offered", "shared"}
 
 
 def writing_open(user: str, writing: Writing) -> bool:
     if writing.author == user:
         return True
-    return writing.share_status == "shared"
+    return _parent_open(user, writing) and writing.share_status == "shared"
 
 
 def comment_visible(user: str, comment: Comment) -> bool:
     if comment.author == user:
         return True
-    return comment.share_status in {"offered", "shared"}
+    return _parent_visible(user, comment) and comment.share_status in {"offered", "shared"}
 
 
 def comment_open(user: str, comment: Comment) -> bool:
     if comment.author == user:
         return True
-    return comment.share_status == "shared"
+    return _parent_open(user, comment) and comment.share_status == "shared"

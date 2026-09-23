@@ -70,6 +70,25 @@ def test_websocket_stops_after_topic_revoke(db_session: Session):
     assert topic.share_status == "private"
 
 
+def test_draft_route_closes_after_topic_revoke(client: TestClient):
+    _login(client, "chris", "pass1")
+    created = client.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
+    topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
+    _login(client, "friend", "pass2")
+    client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
+    _login(client, "chris", "pass1")
+    client.post(f"/topics/{topic_id}/revoke", follow_redirects=False)
+
+    client.post("/logout", follow_redirects=False)
+    _login(client, "friend", "pass2")
+    response = client.post(f"/topics/{topic_id}/draft", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+
 def test_health(client: TestClient):
     response = client.get("/health")
     assert response.status_code == 200

@@ -93,3 +93,22 @@ def test_writing_and_comment_gates():
     comment.share_status = "shared"
     assert access.writing_open("friend", writing)
     assert access.comment_open("friend", comment)
+
+
+def test_child_visibility_respects_parent_topic():
+    private_topic = _topic(share_status="private")
+    shared_topic = _topic(share_status="shared")
+
+    hidden_writing = _writing(share_status="shared", author="chris", topic=private_topic)
+    hidden_comment = _comment(share_status="shared", author="chris", topic=private_topic)
+    visible_writing = _writing(share_status="shared", author="chris", topic=shared_topic)
+    visible_comment = _comment(share_status="shared", author="chris", topic=shared_topic)
+
+    assert not access.writing_visible("friend", hidden_writing)
+    assert not access.writing_open("friend", hidden_writing)
+    assert not access.comment_visible("friend", hidden_comment)
+    assert not access.comment_open("friend", hidden_comment)
+    assert access.writing_visible("friend", visible_writing)
+    assert access.writing_open("friend", visible_writing)
+    assert access.comment_visible("friend", visible_comment)
+    assert access.comment_open("friend", visible_comment)
