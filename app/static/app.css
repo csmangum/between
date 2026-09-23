@@ -108,6 +108,13 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
   color: var(--muted);
   font-size: 14px;
 }
+.nav a {
+  color: var(--muted);
+}
+.nav a:hover {
+  color: var(--ink);
+  text-decoration: none;
+}
 .nav form { margin: 0; }
 .who { color: var(--ink); font-weight: 500; }
 .nav-badge {
