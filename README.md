@@ -1,6 +1,6 @@
 # Between
 
-A private two-person discussion space. Each person writes locally. The other person cannot read a page until both have agreed.
+A private room for two. Write until you are ready. Nothing crosses until you send it and they choose to open it.
 
 The first-draft design document is [DESIGN.md](DESIGN.md).
 
@@ -9,11 +9,11 @@ The first-draft design document is [DESIGN.md](DESIGN.md).
 Everything starts **private**.
 
 1. You write a topic, a long piece, or a comment. It is stored on this machine under `data/local/<your-name>/`.
-2. You **offer** it. The other person sees that something was offered — not the body.
-3. They **agree**. Only then does the body become readable, and a copy is written to `data/shared/`.
+2. You **send** it. The other person sees that something was offered — not the body.
+3. They **open** it. Only then does the body become readable, and a copy is written to `data/shared/`.
 4. You can **pull it back**. Shared access ends.
 
-Chat on a topic stays closed until the *topic itself* is offered and accepted. Chat is the shared layer after agreement.
+Chat on a topic stays closed until the *topic itself* is sent and opened. The margin is for after agreement.
 
 ## Quick start (local)
 

@@ -42,8 +42,8 @@ def _comment(**kwargs):
 
 def test_share_labels_match_metaphor():
     assert share.label("private") == "on your desk"
-    assert share.label("offered") == "sealed offer"
-    assert share.label("shared") == "on the table"
+    assert share.label("offered") == "sealed"
+    assert share.label("shared") == "kept between you"
 
 
 def test_share_label_rejects_unknown():

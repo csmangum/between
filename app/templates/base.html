@@ -14,18 +14,18 @@
     <header class="topbar">
       <a class="brand" href="/">
         {{ app_name }}
-        <small>two people, one record</small>
+        <small>a quiet room for two</small>
       </a>
       <nav class="nav">
         {% if user %}
           <a href="/">Desk</a>
           {% if sealed_count %}
             <a class="nav-badge" href="/#incoming">
-              Offers
+              Waiting
               <span class="count">{{ sealed_count }}</span>
             </a>
           {% endif %}
-          <a href="/archive">Archive</a>
+          <a href="/archive">Kept</a>
           <span class="who">{{ display }}</span>
           <form method="post" action="/logout"><button class="ghost" type="submit">Leave</button></form>
         {% endif %}

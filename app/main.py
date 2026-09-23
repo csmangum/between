@@ -4,7 +4,7 @@ import json
 import os
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -93,8 +93,33 @@ def fmt_dt(value: datetime | None) -> str:
     return value.astimezone().strftime("%b %d, %Y · %H:%M")
 
 
+def fmt_dt_soft(value: datetime | None) -> str:
+    """A quieter relative time for the room's pacing."""
+    if not value:
+        return ""
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    local = value.astimezone()
+    now = datetime.now(timezone.utc).astimezone()
+    delta = now - local
+    seconds = int(delta.total_seconds())
+    if seconds < 90:
+        return "just now"
+    if seconds < 3600:
+        mins = max(1, seconds // 60)
+        return f"{mins}m ago"
+    if local.date() == now.date():
+        return f"today · {local.strftime('%H:%M')}"
+    if local.date() == (now.date() - timedelta(days=1)):
+        return f"yesterday · {local.strftime('%H:%M')}"
+    if seconds < 60 * 60 * 24 * 7:
+        return local.strftime("%A · %H:%M")
+    return local.strftime("%b %d, %Y")
+
+
 templates.env.filters["md"] = md
 templates.env.filters["when"] = fmt_dt
+templates.env.filters["when_soft"] = fmt_dt_soft
 templates.env.filters["share_label"] = share.label
 templates.env.globals["app_name"] = APP_NAME
 templates.env.globals["display_for"] = auth.display_for
@@ -232,7 +257,7 @@ def create_topic(
     db.add(topic)
     db.commit()
     store.write_local(topic)
-    flash(request, "Kept on your desk.")
+    flash(request, "Kept on your desk — only you can see it.")
     return RedirectResponse(f"/topics/{topic.id}", status_code=303)
 
 
@@ -285,7 +310,7 @@ def add_writing(
     db.add(writing)
     db.commit()
     store.write_local(topic, writing)
-    flash(request, "Writing saved to your desk.")
+    flash(request, "Saved privately on your desk.")
     return RedirectResponse(f"/topics/{topic_id}#writing-{writing.id}", status_code=303)
 
 
@@ -317,7 +342,7 @@ def add_comment(
     topic.updated_at = utcnow()
     db.add(comment)
     db.commit()
-    flash(request, "Comment kept private.")
+    flash(request, "Note kept on your side.")
     return RedirectResponse(_topic_anchor(topic_id, writing_id, "comments"), status_code=303)
 
 
@@ -331,7 +356,7 @@ def offer_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
         topic.updated_at = utcnow()
         db.commit()
         store.write_local(topic)
-        flash(request, f"Offered to {other}. Waiting for them to open it.")
+        flash(request, f"Sent to {other}. It stays sealed until they open it.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
@@ -344,7 +369,7 @@ def accept_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
         topic.updated_at = utcnow()
         db.commit()
         store.write_shared(topic)
-        flash(request, "Opened. This topic is on the table between you.")
+        flash(request, "Opened. This sits on the table between you now.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
@@ -357,7 +382,7 @@ def decline_topic(request: Request, topic_id: int, db: Session = Depends(get_db)
         topic.updated_at = utcnow()
         db.commit()
         store.write_local(topic)
-        flash(request, "Declined. The offer returned to their desk.")
+        flash(request, "Left unopened. It returned to their desk.")
         return RedirectResponse("/", status_code=303)
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
@@ -371,7 +396,7 @@ def revoke_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
         topic.updated_at = utcnow()
         db.commit()
         store.write_local(topic)
-        flash(request, "Pulled back. The topic is on your desk again.")
+        flash(request, "Pulled back. Quiet on your desk again.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
@@ -382,13 +407,13 @@ def offer_writing(request: Request, writing_id: int, db: Session = Depends(get_d
     other = auth.display_for(access.other_username(user) or "")
     if writing and writing.author == user and writing.share_status == "private":
         if writing.topic.share_status != "shared":
-            flash(request, "Share the topic first, then offer this writing.", "warn")
+            flash(request, "Open the topic together first, then send this writing.", "warn")
             return RedirectResponse(f"/topics/{writing.topic_id}", status_code=303)
         _apply_status(writing, "offered")
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_local(writing.topic, writing)
-        flash(request, f"Writing offered to {other}.")
+        flash(request, f"Writing sealed for {other}.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
 
 
@@ -401,7 +426,7 @@ def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_shared(writing.topic, writing)
-        flash(request, "Opened. The writing is on the table.")
+        flash(request, "Opened. This writing is kept between you.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
 
 
@@ -414,7 +439,7 @@ def decline_writing(request: Request, writing_id: int, db: Session = Depends(get
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_local(writing.topic, writing)
-        flash(request, "Declined. The writing returned to their desk.")
+        flash(request, "Left unopened. Back on their desk.")
     return RedirectResponse(f"/topics/{writing.topic_id}", status_code=303)
 
 
@@ -427,7 +452,7 @@ def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_local(writing.topic, writing)
-        flash(request, "Pulled back. The writing is private again.")
+        flash(request, "Pulled back to your desk.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
 
 
@@ -441,7 +466,7 @@ def offer_comment(request: Request, comment_id: int, db: Session = Depends(get_d
         _apply_status(comment, "offered")
         comment.topic.updated_at = utcnow()
         db.commit()
-        flash(request, "Comment offered.")
+        flash(request, "Comment sealed for them.")
     return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
 
 
@@ -470,7 +495,7 @@ def decline_comment(request: Request, comment_id: int, db: Session = Depends(get
         _apply_status(comment, "private")
         comment.topic.updated_at = utcnow()
         db.commit()
-        flash(request, "Declined. The comment returned to their desk.")
+        flash(request, "Left unopened. Back on their side.")
     return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
 
 
@@ -484,7 +509,7 @@ def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_
         _apply_status(comment, "private")
         comment.topic.updated_at = utcnow()
         db.commit()
-        flash(request, "Pulled back. The comment is private again.")
+        flash(request, "Comment pulled back.")
     return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
 
 
@@ -618,7 +643,7 @@ def draft_reply(request: Request, topic_id: int, db: Session = Depends(get_db)):
     db.add(writing)
     db.commit()
     store.write_local(topic, writing)
-    flash(request, "A private draft was saved to your desk.")
+    flash(request, "A private draft is waiting on your desk.")
     return RedirectResponse(f"/topics/{topic_id}?agent=ok#writing-{writing.id}", status_code=303)
 
 

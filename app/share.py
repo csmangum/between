@@ -30,9 +30,9 @@ def label(status: str) -> str:
     if kind == "private":
         return "on your desk"
     if kind == "offered":
-        return "sealed offer"
+        return "sealed"
     if kind == "shared":
-        return "on the table"
+        return "kept between you"
     assert_never(kind)
 
 

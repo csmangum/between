@@ -64,21 +64,21 @@ def test_offer_accept_flow(client: TestClient):
 
     home = client.get("/")
     assert home.status_code == 200
-    assert "Waiting for your agreement" in home.text
+    assert "Waiting for you" in home.text
     assert "Letters" in home.text
     assert "private note" not in home.text
 
     consent = client.get(f"/topics/{topic_id}")
     assert consent.status_code == 200
-    assert "Sealed offer" in consent.text
-    assert "Agree and open" in consent.text
+    assert "Sealed for you" in consent.text
+    assert "Open it" in consent.text
 
     accepted = client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
     assert accepted.status_code == 303
     opened = client.get(f"/topics/{topic_id}")
     assert opened.status_code == 200
     assert "private note" in opened.text
-    assert "on the table" in opened.text
+    assert "kept between you" in opened.text
 
 
 def test_health(client: TestClient):

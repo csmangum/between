@@ -1,6 +1,6 @@
 # Between — Design Document
 
-**Status:** polished draft (UI + consent flows)
+**Status:** intimate correspondence polish
 **Date:** 2026-09-23
 **Implements:** the running app in this repo
 **Audience:** the two people who will use it, and anyone who extends it

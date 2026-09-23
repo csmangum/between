@@ -12,16 +12,16 @@
 <body>
   <div class="login-shell">
     <div class="panel login-card">
-      <p class="eyebrow">A private room for two</p>
+      <p class="eyebrow">Just the two of you</p>
       <h1 class="brand-mark">{{ app_name }}</h1>
-      <p class="lede">Write on your own desk. The other person sees nothing until you offer it and they agree to receive it.</p>
+      <p class="lede">Write until you are ready. Nothing crosses until you send it and they choose to open it. What you both keep stays here.</p>
       {% if error %}<p class="error">{{ error }}</p>{% endif %}
       <form method="post" action="/login">
         <label for="username">Name</label>
         <input id="username" name="username" type="text" autocomplete="username" required autofocus>
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required>
-        <button class="full" type="submit">Enter</button>
+        <button class="full" type="submit">Come in</button>
       </form>
     </div>
   </div>

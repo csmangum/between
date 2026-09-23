@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Archive · {{ app_name }}{% endblock %}
+{% block title %}Kept · {{ app_name }}{% endblock %}
 {% block body %}
 <section class="hero">
-  <h1>Archive</h1>
-  <p class="lede">What you can read: your private pages, plus anything both of you agreed to share. Export does not include sealed offers.</p>
+  <h1>What you keep</h1>
+  <p class="lede">Your private pages, and everything both of you chose to open. Sealed offers are not here yet — an unopened letter is not part of the record.</p>
   <div class="actions">
-    <a class="btn" href="/export.md">Download Markdown</a>
-    <a class="btn ghost" href="/export.json">Download JSON</a>
+    <a class="btn" href="/export.md">Take a Markdown copy</a>
+    <a class="btn ghost" href="/export.json">Take a JSON copy</a>
   </div>
 </section>
 
@@ -14,12 +14,22 @@
   <section class="archive-topic">
     <h2><a href="/topics/{{ t.id }}">{{ t.title }}</a></h2>
     {% if t.prompt %}<p class="prompt">{{ t.prompt }}</p>{% endif %}
-    <p class="meta"><span class="badge {{ t.share_status }}">{{ t.share_status|share_label }}</span></p>
+    <p class="meta">
+      <span class="badge {{ t.share_status }}">{{ t.share_status|share_label }}</span>
+      {% if t.share_status == 'shared' and t.accepted_at %}
+        <span class="kept-since"> · opened together {{ t.accepted_at|when_soft }}</span>
+      {% endif %}
+    </p>
 
     {% for w in t.writings %}
       {% if w.author == user or w.share_status == 'shared' %}
         <article class="writing">
-          <div class="author-chip">{{ display_for(w.author) }} · {{ w.created_at|when }}</div>
+          <div class="author-chip">
+            {{ display_for(w.author) }} · {{ w.created_at|when_soft }}
+            {% if w.share_status == 'shared' and w.accepted_at %}
+              · kept {{ w.accepted_at|when_soft }}
+            {% endif %}
+          </div>
           <h3>{{ w.title or "Untitled writing" }}</h3>
           <div class="prose">{{ w.body|md|safe }}</div>
         </article>
@@ -29,7 +39,7 @@
     {% for c in t.comments if c.author == user or c.share_status == 'shared' %}
       {% if loop.first %}<div class="comments">{% endif %}
       <div class="comment">
-        <div class="author-chip">{{ display_for(c.author) }} · {{ c.created_at|when }}</div>
+        <div class="author-chip">{{ display_for(c.author) }} · {{ c.created_at|when_soft }}</div>
         <div class="body">{{ c.body }}</div>
       </div>
       {% if loop.last %}</div>{% endif %}
@@ -37,10 +47,10 @@
 
     {% if t.share_status == 'shared' and t.messages %}
       <div class="comments archive-chat">
-        <p class="meta">Chat</p>
+        <p class="meta">In the margin</p>
         {% for m in t.messages %}
           <div class="comment">
-            <div class="author-chip">{{ display_for(m.author) }} · {{ m.created_at|when }}</div>
+            <div class="author-chip">{{ display_for(m.author) }} · {{ m.created_at|when_soft }}</div>
             <div class="body">{{ m.body }}</div>
           </div>
         {% endfor %}
@@ -48,6 +58,6 @@
     {% endif %}
   </section>
 {% else %}
-  <p class="empty">Nothing you can read yet.</p>
+  <p class="empty">Nothing kept yet. Begin on your desk; what you both open will gather here.</p>
 {% endfor %}
 {% endblock %}

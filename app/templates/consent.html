@@ -1,18 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Agree to see · {{ topic.title }}{% endblock %}
+{% block title %}Open · {{ topic.title }}{% endblock %}
 {% block body %}
 <p class="meta"><a href="/">← Desk</a></p>
 <div class="consent-shell">
   <section class="consent-letter">
-    <p class="eyebrow">Sealed offer</p>
+    <p class="eyebrow">Sealed for you</p>
     <h1 class="page-title">{{ topic.title }}</h1>
-    <p class="lede">{{ display_for(topic.created_by) }} wants to share this topic with you. The writings, comments, and notes stay hidden until you agree.</p>
+    <p class="lede">{{ display_for(topic.created_by) }} sent this when they were ready. The writings and notes inside stay hidden until you open it — or leave it for another time.</p>
+    {% if topic.offered_at %}
+      <p class="meta kept-since">Sent {{ topic.offered_at|when_soft }}</p>
+    {% endif %}
     <div class="actions">
       <form method="post" action="/topics/{{ topic.id }}/accept">
-        <button type="submit">Agree and open</button>
+        <button type="submit">Open it</button>
       </form>
       <form method="post" action="/topics/{{ topic.id }}/decline">
-        <button class="ghost" type="submit">Decline</button>
+        <button class="ghost" type="submit">Not yet</button>
       </form>
     </div>
   </section>
