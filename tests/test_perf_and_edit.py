@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.main import attach_topic_counts
 from app.markdown_render import render_markdown
-from app.models import ChatMessage, Comment, Topic, Writing
+from app.models import Comment, Topic, Writing
 
 
 def _login(client, username: str, password: str) -> None:
@@ -50,7 +50,8 @@ def test_edit_private_writing_keeps_single_local_file(client, db_session: Sessio
     assert "revised privately" in page.text
     assert "Draft v2" in page.text
 
-    folder = Path("/tmp/between-tests/local/chris/0001-edit-me")
+    topic = db_session.get(Topic, topic_id)
+    folder = Path(f"/tmp/between-tests/local/chris/{topic.id:04d}-edit-me")
     assert (folder / f"writing-{writing_id}.md").exists()
     assert list(folder.glob(f"writing-{writing_id}-*.md")) == []
 
@@ -130,7 +131,8 @@ def test_private_comment_mirror_recreated_on_decline_and_revoke(client, db_sessi
     client.post(f"/topics/{topic_id}/comments", data={"body": "quiet note"}, follow_redirects=False)
 
     comment = db_session.query(Comment).one()
-    local_path = Path(f"/tmp/between-tests/local/chris/0001-comments/comment-{comment.id}.md")
+    topic = db_session.get(Topic, topic_id)
+    local_path = Path(f"/tmp/between-tests/local/chris/{topic.id:04d}-comments/comment-{comment.id}.md")
     assert local_path.exists()
     assert "_status: private_" in local_path.read_text(encoding="utf-8")
 

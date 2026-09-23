@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 TEST_ROOT = Path("/tmp/between-tests")
