@@ -40,6 +40,14 @@ def test_external_markdown_links_open_away_from_the_room():
     assert "target=" not in internal
 
 
+def test_failed_login_keeps_the_name(client):
+    response = client.post("/login", data={"username": "chris", "password": "nope"})
+    assert response.status_code == 401
+    assert 'value="chris"' in response.text
+    assert "nope" not in response.text
+    assert "did not match" in response.text
+
+
 def test_blank_topic_title_does_not_land_on_the_desk(client):
     _login(client, "chris", "pass1")
     response = client.post("/topics", data={"title": "   ", "prompt": "still private"}, follow_redirects=False)

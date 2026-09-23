@@ -260,7 +260,13 @@ def login_page(request: Request):
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
     person = auth.verify(username, password)
     if not person:
-        return render(request, "login.html", status_code=401, error="That name or password did not match.")
+        return render(
+            request,
+            "login.html",
+            status_code=401,
+            error="That name or password did not match.",
+            username=username,
+        )
     request.session["user"] = person.username
     return RedirectResponse("/", status_code=303)
 

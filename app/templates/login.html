@@ -19,9 +19,9 @@
       {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
       <form method="post" action="/login">
         <label for="username">Name</label>
-        <input id="username" name="username" type="text" autocomplete="username" required autofocus>
+        <input id="username" name="username" type="text" autocomplete="username" required value="{{ username or '' }}" {% if not username %}autofocus{% endif %}>
         <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <input id="password" name="password" type="password" autocomplete="current-password" required {% if username %}autofocus{% endif %}>
         <button class="full" type="submit">Come in</button>
       </form>
     </div>
