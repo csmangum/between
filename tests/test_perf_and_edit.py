@@ -185,6 +185,56 @@ def test_accept_writing_requires_shared_topic(client, db_session: Session):
     assert writing.share_status == "offered"
 
 
+def test_decline_writing_requires_shared_topic(client, db_session: Session):
+    _login(client, "chris", "pass1")
+    created = client.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
+    topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
+    _login(client, "friend", "pass2")
+    client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
+    _login(client, "chris", "pass1")
+    client.post(f"/topics/{topic_id}/writings", data={"title": "Draft", "body": "v1"}, follow_redirects=False)
+    writing = db_session.query(Writing).one()
+    client.post(f"/writings/{writing.id}/offer", follow_redirects=False)
+    client.post(f"/topics/{topic_id}/revoke", follow_redirects=False)
+
+    client.post("/logout", follow_redirects=False)
+    _login(client, "friend", "pass2")
+    response = client.post(f"/writings/{writing.id}/decline", follow_redirects=False)
+    assert response.status_code == 303
+    db_session.expire_all()
+    writing = db_session.get(Writing, writing.id)
+    assert writing.share_status == "offered"
+
+
+def test_comment_actions_require_shared_topic(client, db_session: Session):
+    _login(client, "chris", "pass1")
+    created = client.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
+    topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
+    _login(client, "friend", "pass2")
+    client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
+    _login(client, "chris", "pass1")
+    client.post(f"/topics/{topic_id}/comments", data={"body": "quiet note"}, follow_redirects=False)
+    comment = db_session.query(Comment).one()
+    client.post(f"/comments/{comment.id}/offer", follow_redirects=False)
+    client.post(f"/topics/{topic_id}/revoke", follow_redirects=False)
+
+    client.post("/logout", follow_redirects=False)
+    _login(client, "friend", "pass2")
+    accept = client.post(f"/comments/{comment.id}/accept", follow_redirects=False)
+    decline = client.post(f"/comments/{comment.id}/decline", follow_redirects=False)
+    assert accept.status_code == 303
+    assert decline.status_code == 303
+    db_session.expire_all()
+    comment = db_session.get(Comment, comment.id)
+    assert comment.share_status == "offered"
+
+
 def test_static_cache_header(client):
     response = client.get("/static/app.css")
     assert response.status_code == 200
