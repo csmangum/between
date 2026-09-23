@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Table · {{ app_name }}{% endblock %}
+{% block body %}
+<section class="hero">
+  <p class="meta between-line">{{ display }} · {{ other }}</p>
+  <h1>The table</h1>
+  <p class="lede">What you both opened sits here. Private drafts stay on your desk. A sealed writing shows its title until you receive it.</p>
+</section>
+
+{% if not cards %}
+  <p class="empty">Nothing sits between you yet. When you are ready, send a topic from your desk — they have to open it before it becomes shared.</p>
+{% else %}
+  {% if lately %}
+    <section class="section-block">
+      <h2 class="section-label">Lately</h2>
+      <div class="table-moments">
+        {% for m in lately %}
+          <a class="table-moment" href="{{ m.href }}">
+            <p class="kind">{{ m.kind_label }} · {{ m.topic_title }}</p>
+            {% if m.heading %}<h3>{{ m.heading }}</h3>{% endif %}
+            <p class="prompt">{{ m.excerpt }}</p>
+            <div class="counts">
+              <span>{{ display_for(m.author) }}</span>
+              <span>{{ m.at|when_soft }}</span>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
+
+  <section class="section-block">
+    <h2 class="section-label">On the table</h2>
+    <div class="table-cards">
+      {% for card in cards %}
+        <article class="table-card">
+          <h3><a href="/topics/{{ card.id }}">{{ card.title }}</a></h3>
+          {% if card.prompt %}<p class="prompt">{{ card.prompt }}</p>{% endif %}
+          <p class="meta">
+            <span class="badge shared">kept between you</span>
+            {% if card.accepted_at %}
+              <span class="kept-since"> · opened together {{ card.accepted_at|when_soft }}</span>
+            {% endif %}
+          </p>
+
+          {% if card.latest_writing %}
+            <a class="table-highlight" href="{{ card.latest_writing.href }}">
+              <p class="kind">Latest writing</p>
+              <h4>{{ card.latest_writing.heading }}</h4>
+              <p class="prompt">{{ card.latest_writing.excerpt }}</p>
+              <p class="meta">{{ display_for(card.latest_writing.author) }} · {{ card.latest_writing.at|when_soft }}</p>
+            </a>
+          {% endif %}
+
+          {% if card.latest_margin %}
+            <a class="table-highlight" href="{{ card.latest_margin.href }}">
+              <p class="kind">Latest in the margin</p>
+              <p class="prompt">{{ card.latest_margin.excerpt }}</p>
+              <p class="meta">{{ display_for(card.latest_margin.author) }} · {{ card.latest_margin.at|when_soft }}</p>
+            </a>
+          {% endif %}
+
+          {% if card.waiting %}
+            <div class="table-waiting">
+              {% for w in card.waiting %}
+                <a class="table-waiting-item" href="{{ w.href }}">
+                  <span class="badge offered">sealed</span>
+                  <span>{{ w.title }}</span>
+                  <span class="meta">from {{ display_for(w.author) }}{% if w.at %} · {{ w.at|when_soft }}{% endif %} — waiting for you</span>
+                </a>
+              {% endfor %}
+            </div>
+          {% endif %}
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+{% endblock %}

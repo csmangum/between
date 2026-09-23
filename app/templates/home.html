@@ -51,20 +51,28 @@
 
     <section class="section-block">
       <h2 class="section-label">Between you</h2>
-      {% if shared %}
-        <div class="topic-list">
-          {% for t in shared %}
-            <a class="topic-row shared-row" href="/topics/{{ t.id }}">
-              <h3>{{ t.title }}</h3>
-              <div class="counts">
-                <span class="badge shared">{{ t.share_status|share_label }}</span>
-                <span>{{ t.writing_count }} writings</span>
-                <span>{{ t.message_count }} in the margin</span>
-                {% if t.accepted_at %}<span>opened {{ t.accepted_at|when_soft }}</span>{% endif %}
-              </div>
-            </a>
-          {% endfor %}
-        </div>
+      {% if table_count %}
+        <a class="topic-row shared-row" href="/table">
+          <h3>On the table</h3>
+          {% if latest %}
+            <p class="prompt">{{ latest.excerpt }}</p>
+            <div class="counts">
+              <span>{{ display_for(latest.author) }}</span>
+              <span>{{ latest.at|when_soft }}</span>
+              <span>{{ latest.topic_title }}</span>
+            </div>
+          {% elif table_topic %}
+            {% if table_topic.prompt %}<p class="prompt">{{ table_topic.prompt }}</p>{% endif %}
+            <div class="counts">
+              <span>{{ table_topic.title }}</span>
+              {% if table_topic.accepted_at %}<span>opened {{ table_topic.accepted_at|when_soft }}</span>{% endif %}
+            </div>
+          {% endif %}
+          <div class="counts">
+            <span class="badge shared">kept between you</span>
+            <span>{{ table_count }} {{ "topic" if table_count == 1 else "topics" }}</span>
+          </div>
+        </a>
       {% else %}
         <p class="empty">Nothing sits between you yet. When you are ready, send a topic from your desk — they have to open it before it becomes shared.</p>
       {% endif %}
