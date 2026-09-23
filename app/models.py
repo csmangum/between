@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -14,6 +14,11 @@ def utcnow() -> datetime:
 
 class Topic(Base):
     __tablename__ = "topics"
+    __table_args__ = (
+        Index("ix_topics_updated_at", "updated_at"),
+        Index("ix_topics_share_status", "share_status"),
+        Index("ix_topics_created_by", "created_by"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     title: Mapped[str] = mapped_column(String(240))
@@ -38,6 +43,10 @@ class Topic(Base):
 
 class Writing(Base):
     __tablename__ = "writings"
+    __table_args__ = (
+        Index("ix_writings_topic_id", "topic_id"),
+        Index("ix_writings_share_status", "share_status"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"))
@@ -55,6 +64,10 @@ class Writing(Base):
 
 class Comment(Base):
     __tablename__ = "comments"
+    __table_args__ = (
+        Index("ix_comments_topic_id", "topic_id"),
+        Index("ix_comments_writing_id", "writing_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"))
@@ -72,6 +85,7 @@ class Comment(Base):
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
+    __table_args__ = (Index("ix_chat_messages_topic_id", "topic_id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"))

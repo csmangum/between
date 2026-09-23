@@ -73,4 +73,4 @@ XAI_API_KEY=xai-...
 
 ## What this is not
 
-Not a public forum. Not a live shared doc. It is a desk for two people, with a door between them that only opens by agreement.
+Not a public forum. Not a live shared doc. It is a quiet desk for two, with a door between them that opens only when both are ready.

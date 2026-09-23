@@ -63,6 +63,18 @@
                 <p class="meta">Open the topic together first, then you can send this writing.</p>
               {% endif %}
             </div>
+            {% if w.share_status == 'private' %}
+              <details class="edit-fold">
+                <summary>Edit on your desk</summary>
+                <form method="post" action="/writings/{{ w.id }}/edit" class="edit-form">
+                  <label for="edit-title-{{ w.id }}">Title</label>
+                  <input id="edit-title-{{ w.id }}" name="title" type="text" value="{{ w.title }}">
+                  <label for="edit-body-{{ w.id }}">Writing</label>
+                  <textarea id="edit-body-{{ w.id }}" name="body" required>{{ w.body }}</textarea>
+                  <button type="submit">Save changes</button>
+                </form>
+              </details>
+            {% endif %}
           {% endif %}
 
           <div class="comments">

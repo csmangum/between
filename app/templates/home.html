@@ -38,7 +38,7 @@
               {% if t.share_status == 'private' and t.prompt %}<p class="prompt">{{ t.prompt }}</p>{% endif %}
               <div class="counts">
                 <span class="badge {{ t.share_status }}">{{ t.share_status|share_label }}</span>
-                <span>{{ t.writings|length }} writings</span>
+                <span>{{ t.writing_count }} writings</span>
                 <span>{{ t.updated_at|when_soft }}</span>
               </div>
             </a>
@@ -58,8 +58,8 @@
               <h3>{{ t.title }}</h3>
               <div class="counts">
                 <span class="badge shared">{{ t.share_status|share_label }}</span>
-                <span>{{ t.writings|length }} writings</span>
-                <span>{{ t.messages|length }} in the margin</span>
+                <span>{{ t.writing_count }} writings</span>
+                <span>{{ t.message_count }} in the margin</span>
                 {% if t.accepted_at %}<span>opened {{ t.accepted_at|when_soft }}</span>{% endif %}
               </div>
             </a>

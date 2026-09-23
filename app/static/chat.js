@@ -9,9 +9,12 @@
   if (!log || !form || !input || !presence) return;
 
   const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${location.host}/ws/topics/${config.topicId}`);
+  let ws = null;
   let typingTimer = null;
   let typingOn = false;
+  let reconnectAttempt = 0;
+  let closedOnPurpose = false;
+  const pending = [];
 
   function addBubble(msg) {
     const el = document.createElement("div");
@@ -35,17 +38,54 @@
       : `${here} here`;
   }
 
+  function setStatus(text) {
+    presence.textContent = text;
+  }
+
   function sendTyping(on) {
-    if (ws.readyState !== 1 || typingOn === on) return;
+    if (!ws || ws.readyState !== 1 || typingOn === on) return;
     typingOn = on;
     ws.send(JSON.stringify({ type: "typing", on }));
   }
 
-  ws.addEventListener("message", (event) => {
-    const msg = JSON.parse(event.data);
-    if (msg.type === "presence") showPresence(msg);
-    else if (msg.body) addBubble(msg);
-  });
+  function flushPending() {
+    while (pending.length && ws && ws.readyState === 1) {
+      ws.send(JSON.stringify(pending.shift()));
+    }
+  }
+
+  function connect() {
+    closedOnPurpose = false;
+    setStatus(reconnectAttempt ? "Reconnecting…" : "Connecting…");
+    ws = new WebSocket(`${proto}://${location.host}/ws/topics/${config.topicId}`);
+
+    ws.addEventListener("open", () => {
+      reconnectAttempt = 0;
+      setStatus("Connected");
+      flushPending();
+    });
+
+    ws.addEventListener("message", (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "presence") showPresence(msg);
+      else if (msg.body) addBubble(msg);
+    });
+
+    ws.addEventListener("close", () => {
+      if (closedOnPurpose) return;
+      const delay = Math.min(10000, 500 * Math.pow(2, reconnectAttempt++));
+      setStatus("Disconnected — retrying…");
+      setTimeout(connect, delay);
+    });
+
+    ws.addEventListener("error", () => {
+      try {
+        ws.close();
+      } catch (_) {
+        /* ignore */
+      }
+    });
+  }
 
   input.addEventListener("input", () => {
     sendTyping(true);
@@ -56,11 +96,24 @@
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     const body = input.value.trim();
-    if (!body || ws.readyState !== 1) return;
+    if (!body) return;
     sendTyping(false);
-    ws.send(JSON.stringify({ type: "chat", body }));
+    const payload = { type: "chat", body };
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify(payload));
+    } else {
+      pending.push(payload);
+      setStatus("Queued — reconnecting…");
+      if (!ws || ws.readyState > 1) connect();
+    }
     input.value = "";
   });
 
+  window.addEventListener("beforeunload", () => {
+    closedOnPurpose = true;
+    if (ws) ws.close();
+  });
+
   log.scrollTop = log.scrollHeight;
+  connect();
 })();

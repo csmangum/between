@@ -8,19 +8,22 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-import bleach
-import markdown
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, selectinload
+from starlette.concurrency import run_in_threadpool
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.types import Scope
 
 from . import access, agent, auth, share, store
-from .db import Base, SessionLocal, engine, get_db, migrate
+from .db import Base, SessionLocal, db_ok, engine, get_db, migrate
 from .hub import hub
+from .markdown_render import render_markdown
 from .models import ChatMessage, Comment, Topic, Writing, utcnow
 from .share import ShareStatus
 
@@ -28,39 +31,7 @@ load_dotenv()
 
 APP_NAME = os.getenv("APP_NAME", "Between")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-change-me")
-
-ALLOWED_TAGS = bleach.sanitizer.ALLOWED_TAGS.union(
-    {
-        "p",
-        "pre",
-        "code",
-        "h1",
-        "h2",
-        "h3",
-        "h4",
-        "blockquote",
-        "hr",
-        "ul",
-        "ol",
-        "li",
-        "em",
-        "strong",
-        "a",
-        "br",
-        "img",
-        "table",
-        "thead",
-        "tbody",
-        "tr",
-        "th",
-        "td",
-    }
-)
-ALLOWED_ATTRS = {
-    **bleach.sanitizer.ALLOWED_ATTRIBUTES,
-    "a": ["href", "title", "rel"],
-    "img": ["src", "alt", "title"],
-}
+HTTPS_ONLY = os.getenv("HTTPS_ONLY", "").lower() in {"1", "true", "yes"}
 
 
 @asynccontextmanager
@@ -70,19 +41,31 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title=APP_NAME, lifespan=lifespan)
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax", https_only=False)
+app.add_middleware(GZipMiddleware, minimum_size=400)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    same_site="lax",
+    https_only=HTTPS_ONLY,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
-app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+
+class CachedStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope: Scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers.setdefault("Cache-Control", "public, max-age=86400, immutable")
+        return response
+
+
+app.mount("/static", CachedStaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 
 def md(text: str) -> str:
-    raw = markdown.markdown(
-        text or "",
-        extensions=["fenced_code", "tables", "nl2br", "sane_lists"],
-    )
-    return bleach.clean(raw, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
+    return render_markdown(text)
 
 
 def fmt_dt(value: datetime | None) -> str:
@@ -162,23 +145,50 @@ def pop_flashes(request: Request) -> list[dict[str, str]]:
     return list(request.session.pop("flashes", []) or [])
 
 
-def sealed_offer_count(user: str | None) -> int:
+def sealed_offer_count(user: str | None, db: Session | None = None) -> int:
     if not user:
         return 0
-    db = SessionLocal()
+    own = db is not None
+    session = db or SessionLocal()
     try:
         return (
-            db.query(Topic)
+            session.query(Topic)
             .filter(Topic.created_by != user, Topic.share_status == "offered")
             .count()
         )
     finally:
-        db.close()
+        if not own:
+            session.close()
 
 
-def ctx(request: Request, **extra: Any) -> dict[str, Any]:
+def attach_topic_counts(db: Session, topics: list[Topic]) -> None:
+    """Batch-load writing/message counts to avoid N+1 on the desk."""
+    if not topics:
+        return
+    ids = [t.id for t in topics]
+    writing_counts = dict(
+        db.query(Writing.topic_id, func.count(Writing.id))
+        .filter(Writing.topic_id.in_(ids))
+        .group_by(Writing.topic_id)
+        .all()
+    )
+    message_counts = dict(
+        db.query(ChatMessage.topic_id, func.count(ChatMessage.id))
+        .filter(ChatMessage.topic_id.in_(ids))
+        .group_by(ChatMessage.topic_id)
+        .all()
+    )
+    for topic in topics:
+        topic.writing_count = writing_counts.get(topic.id, 0)
+        topic.message_count = message_counts.get(topic.id, 0)
+
+
+def ctx(request: Request, db: Session | None = None, **extra: Any) -> dict[str, Any]:
     user = current_user(request)
     people = auth.load_people()
+    sealed = extra.pop("sealed_count", None)
+    if sealed is None:
+        sealed = sealed_offer_count(user, db)
     return {
         "request": request,
         "user": user,
@@ -187,13 +197,18 @@ def ctx(request: Request, **extra: Any) -> dict[str, Any]:
         "other_user": access.other_username(user) if user else None,
         "people": people,
         "flashes": pop_flashes(request),
-        "sealed_count": extra.pop("sealed_count", sealed_offer_count(user)),
+        "sealed_count": sealed,
         **extra,
     }
 
 
-def render(request: Request, name: str, status_code: int = 200, **extra: Any):
-    return templates.TemplateResponse(request, name, ctx(request, **extra), status_code=status_code)
+def render(request: Request, name: str, status_code: int = 200, db: Session | None = None, **extra: Any):
+    return templates.TemplateResponse(
+        request,
+        name,
+        ctx(request, db=db, **extra),
+        status_code=status_code,
+    )
 
 
 def _apply_status(obj, status: ShareStatus) -> None:
@@ -232,7 +247,9 @@ def logout(request: Request):
 
 def _visible_topics(db: Session, user: str) -> list[Topic]:
     topics = db.query(Topic).order_by(Topic.updated_at.desc()).all()
-    return [t for t in topics if access.topic_visible(user, t)]
+    visible = [t for t in topics if access.topic_visible(user, t)]
+    attach_topic_counts(db, visible)
+    return visible
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -242,7 +259,15 @@ def home(request: Request, db: Session = Depends(get_db)):
     desk = [t for t in topics if t.created_by == user]
     incoming = [t for t in topics if t.created_by != user and t.share_status == "offered"]
     shared = [t for t in topics if t.share_status == "shared"]
-    return render(request, "home.html", desk=desk, incoming=incoming, shared=shared)
+    return render(
+        request,
+        "home.html",
+        db=db,
+        desk=desk,
+        incoming=incoming,
+        shared=shared,
+        sealed_count=len(incoming),
+    )
 
 
 @app.post("/topics")
@@ -264,11 +289,20 @@ def create_topic(
 @app.get("/topics/{topic_id}", response_class=HTMLResponse)
 def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    topic = db.get(Topic, topic_id)
+    topic = (
+        db.query(Topic)
+        .options(
+            selectinload(Topic.writings),
+            selectinload(Topic.comments),
+            selectinload(Topic.messages),
+        )
+        .filter(Topic.id == topic_id)
+        .one_or_none()
+    )
     if not topic or not access.topic_visible(user, topic):
         return RedirectResponse("/", status_code=303)
     if not access.topic_open(user, topic):
-        return render(request, "consent.html", topic=topic)
+        return render(request, "consent.html", db=db, topic=topic)
 
     visible_writings = [w for w in topic.writings if access.writing_visible(user, w)]
     comments_by_writing: dict[int | None, list[Comment]] = defaultdict(list)
@@ -278,6 +312,7 @@ def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)):
     return render(
         request,
         "topic.html",
+        db=db,
         topic=topic,
         writings=visible_writings,
         comments_by_writing=comments_by_writing,
@@ -456,6 +491,34 @@ def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
 
 
+@app.post("/writings/{writing_id}/edit")
+def edit_writing(
+    request: Request,
+    writing_id: int,
+    title: str = Form(""),
+    body: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Authors may revise private writings without a new accept cycle."""
+    user = require_user(request)
+    writing = db.get(Writing, writing_id)
+    if not writing or writing.author != user:
+        return RedirectResponse("/", status_code=303)
+    if writing.share_status != "private":
+        flash(request, "Pull it back to your desk before editing.", "warn")
+        return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
+    if not body.strip():
+        return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
+    writing.title = title.strip()
+    writing.body = body.strip()
+    writing.updated_at = utcnow()
+    writing.topic.updated_at = utcnow()
+    db.commit()
+    store.write_local(writing.topic, writing)
+    flash(request, "Writing updated on your desk.")
+    return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
+
+
 @app.post("/comments/{comment_id}/offer")
 def offer_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
@@ -513,17 +576,31 @@ def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_
     return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
 
 
+def _open_topics(db: Session, user: str) -> list[Topic]:
+    topics = (
+        db.query(Topic)
+        .options(
+            selectinload(Topic.writings),
+            selectinload(Topic.comments),
+            selectinload(Topic.messages),
+        )
+        .order_by(Topic.created_at.asc())
+        .all()
+    )
+    return [t for t in topics if access.topic_open(user, t)]
+
+
 @app.get("/archive", response_class=HTMLResponse)
 def archive(request: Request, db: Session = Depends(get_db)):
     user = require_user(request)
-    topics = [t for t in db.query(Topic).order_by(Topic.created_at.asc()).all() if access.topic_open(user, t)]
-    return render(request, "archive.html", topics=topics, viewer=user)
+    topics = _open_topics(db, user)
+    return render(request, "archive.html", db=db, topics=topics, viewer=user)
 
 
 @app.get("/export.json")
 def export_json(request: Request, db: Session = Depends(get_db)):
     user = require_user(request)
-    topics = [t for t in db.query(Topic).order_by(Topic.created_at.asc()).all() if access.topic_open(user, t)]
+    topics = _open_topics(db, user)
     payload = []
     for t in topics:
         payload.append(
@@ -583,7 +660,7 @@ def export_json(request: Request, db: Session = Depends(get_db)):
 @app.get("/export.md")
 def export_md(request: Request, db: Session = Depends(get_db)):
     user = require_user(request)
-    topics = [t for t in db.query(Topic).order_by(Topic.created_at.asc()).all() if access.topic_open(user, t)]
+    topics = _open_topics(db, user)
     lines = [f"# {APP_NAME} archive", "", f"_Exported {fmt_dt(utcnow())}_", ""]
     for t in topics:
         lines += [f"## {t.title}", ""]
@@ -622,13 +699,22 @@ def export_md(request: Request, db: Session = Depends(get_db)):
 
 
 @app.post("/topics/{topic_id}/draft")
-def draft_reply(request: Request, topic_id: int, db: Session = Depends(get_db)):
+async def draft_reply(request: Request, topic_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    topic = db.get(Topic, topic_id)
+    topic = (
+        db.query(Topic)
+        .options(
+            selectinload(Topic.writings),
+            selectinload(Topic.comments),
+            selectinload(Topic.messages),
+        )
+        .filter(Topic.id == topic_id)
+        .one_or_none()
+    )
     if not topic or not access.topic_open(user, topic):
         return RedirectResponse("/", status_code=303)
     try:
-        body = agent.draft_reply(topic, user)
+        body = await run_in_threadpool(agent.draft_reply, topic, user)
     except Exception as exc:
         note = "missing" if "missing-key" in str(exc) else "fail"
         return RedirectResponse(f"/topics/{topic_id}?agent={note}#write", status_code=303)
@@ -698,4 +784,8 @@ async def topic_chat(websocket: WebSocket, topic_id: int):
 
 @app.get("/health")
 def health():
-    return JSONResponse({"ok": True, "app": APP_NAME})
+    healthy = db_ok()
+    return JSONResponse(
+        {"ok": healthy, "app": APP_NAME, "db": "ok" if healthy else "error"},
+        status_code=200 if healthy else 503,
+    )
