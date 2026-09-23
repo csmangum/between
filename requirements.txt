@@ -4,7 +4,7 @@ sqlalchemy==2.0.40
 jinja2==3.1.6
 python-multipart==0.0.30
 itsdangerous==2.2.0
-markdown==3.8
+markdown==3.8.1
 bleach==6.2.0
 python-dotenv==1.1.0
 httpx==0.28.1
