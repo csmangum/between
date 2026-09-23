@@ -75,6 +75,22 @@ def test_empty_writing_warns_instead_of_saving(client):
     assert "Empty" not in page.text
 
 
+def test_opened_topic_leaves_the_private_desk(client):
+    _login(client, "chris", "pass1")
+    created = client.post("/topics", data={"title": "On the table", "prompt": ""}, follow_redirects=False)
+    topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
+    _login(client, "friend", "pass2")
+    client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
+    _login(client, "chris", "pass1")
+    home = client.get("/")
+    assert home.text.count(f'href="/topics/{topic_id}"') == 1
+    assert "Between you" in home.text
+    assert "On the table" in home.text
+
+
 def test_missing_page_for_someone_in_the_room(client):
     _login(client, "chris", "pass1")
     page = client.get("/not-a-page")

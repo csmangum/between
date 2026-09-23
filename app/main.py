@@ -288,7 +288,7 @@ def _visible_topics(db: Session, user: str) -> list[Topic]:
 def home(request: Request, db: Session = Depends(get_db)):
     user = require_user(request)
     topics = _visible_topics(db, user)
-    desk = [t for t in topics if t.created_by == user]
+    desk = [t for t in topics if t.created_by == user and t.share_status != "shared"]
     incoming = [t for t in topics if t.created_by != user and t.share_status == "offered"]
     shared = [t for t in topics if t.share_status == "shared"]
     return render(
