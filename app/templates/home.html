@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Topics · {{ app_name }}{% endblock %}
+{% block body %}
+<section class="hero">
+  <p class="meta">Between {{ display }} and {{ other }}</p>
+  <h1>Your desk</h1>
+  <p class="lede">Write privately. Nothing the other person can read is shown until you offer it and they agree to receive it. Shared pages live on the table between you.</p>
+</section>
+
+{% if incoming %}
+  <section class="card" style="margin-bottom:24px;">
+    <h2 style="font-family:var(--serif);font-weight:500;margin-top:0;">Waiting for your agreement</h2>
+    <p class="meta">{{ other }} offered these topics. The contents stay sealed until you accept.</p>
+    <div class="topic-list">
+      {% for t in incoming %}
+        <a class="topic-row" href="/topics/{{ t.id }}">
+          <h3>{{ t.title }}</h3>
+          <div class="counts">
+            <span class="badge offered">offered</span>
+            <span>from {{ display_for(t.created_by) }}</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+<div class="grid">
+  <div>
+    <h2 class="section-label">Private to you</h2>
+    {% if desk %}
+      <div class="topic-list">
+        {% for t in desk %}
+          <a class="topic-row" href="/topics/{{ t.id }}">
+            <h3>{{ t.title }}</h3>
+            {% if t.share_status == 'private' and t.prompt %}<p class="prompt">{{ t.prompt }}</p>{% endif %}
+            <div class="counts">
+              <span class="badge {{ t.share_status }}">{{ t.share_status }}</span>
+              <span>{{ t.writings|length }} writings</span>
+              <span>updated {{ t.updated_at|when }}</span>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty">Nothing on your desk yet. Open a topic on the right. It stays yours until you offer it.</p>
+    {% endif %}
+
+    <h2 class="section-label" style="margin-top:32px;">Shared table</h2>
+    {% if shared %}
+      <div class="topic-list">
+        {% for t in shared %}
+          <a class="topic-row" href="/topics/{{ t.id }}">
+            <h3>{{ t.title }}</h3>
+            <div class="counts">
+              <span class="badge shared">shared</span>
+              <span>{{ t.writings|length }} writings</span>
+              <span>{{ t.messages|length }} chat</span>
+            </div>
+          </a>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty">No shared topics yet. Offer one from your desk; they have to accept before they can read it.</p>
+    {% endif %}
+  </div>
+
+  <aside class="card">
+    <h2 style="font-family:var(--serif);font-weight:500;margin-top:0;">New topic</h2>
+    <p class="meta">Starts private. Stored on this machine under <code>data/local/{{ user }}</code>.</p>
+    <form method="post" action="/topics">
+      <label for="title">Title</label>
+      <input id="title" name="title" type="text" required placeholder="What this is about">
+      <label for="prompt">Opening note</label>
+      <textarea id="prompt" name="prompt" placeholder="Only you will see this until the topic is shared."></textarea>
+      <button class="full" type="submit">Keep on my desk</button>
+    </form>
+  </aside>
+</div>
+{% endblock %}

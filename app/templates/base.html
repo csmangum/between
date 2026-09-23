@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <a class="brand" href="/">
+        {{ app_name }}
+        <small>two people, one record</small>
+      </a>
+      <nav class="nav">
+        {% if user %}
+          <a href="/">Topics</a>
+          <a href="/archive">Archive</a>
+          <span class="who">{{ display }}</span>
+          <form method="post" action="/logout"><button class="ghost" type="submit">Leave</button></form>
+        {% endif %}
+      </nav>
+    </header>
+    {% block body %}{% endblock %}
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

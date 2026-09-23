@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Agree to see · {{ topic.title }}{% endblock %}
+{% block body %}
+<p class="meta"><a href="/">← Topics</a></p>
+<section class="card" style="max-width:640px;margin:24px auto;">
+  <p class="meta">Sealed offer</p>
+  <h1 class="page-title" style="font-size:34px;">{{ topic.title }}</h1>
+  <p class="lede">{{ display_for(topic.created_by) }} wants to share this topic with you. The writings, comments, and notes stay hidden until you agree.</p>
+  <div class="actions">
+    <form method="post" action="/topics/{{ topic.id }}/accept">
+      <button type="submit">Agree and open</button>
+    </form>
+    <form method="post" action="/topics/{{ topic.id }}/decline">
+      <button class="ghost" type="submit">Decline</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

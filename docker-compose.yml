@@ -1,0 +1,22 @@
+services:
+  between:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-change-me-to-a-long-random-string}
+      APP_NAME: ${APP_NAME:-Between}
+      USER1_NAME: ${USER1_NAME:-chris}
+      USER1_DISPLAY: ${USER1_DISPLAY:-Chris}
+      USER1_PASSWORD: ${USER1_PASSWORD:-change-me}
+      USER2_NAME: ${USER2_NAME:-friend}
+      USER2_DISPLAY: ${USER2_DISPLAY:-Friend}
+      USER2_PASSWORD: ${USER2_PASSWORD:-change-me}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      AGENT_API_KEY: ${AGENT_API_KEY:-}
+      AGENT_BASE_URL: ${AGENT_BASE_URL:-https://api.x.ai/v1}
+      AGENT_MODEL: ${AGENT_MODEL:-grok-4}
+      DATABASE_URL: sqlite:////data/between.db
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
