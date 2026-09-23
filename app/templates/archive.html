@@ -14,7 +14,7 @@
   <section class="archive-topic">
     <h2><a href="/topics/{{ t.id }}">{{ t.title }}</a></h2>
     {% if t.prompt %}<p class="prompt">{{ t.prompt }}</p>{% endif %}
-    <p class="meta"><span class="badge {{ t.share_status }}">{{ t.share_status }}</span></p>
+    <p class="meta"><span class="badge {{ t.share_status }}">{{ t.share_status|share_label }}</span></p>
 
     {% for w in t.writings %}
       {% if w.author == user or w.share_status == 'shared' %}
@@ -26,25 +26,17 @@
       {% endif %}
     {% endfor %}
 
-    {% set shown = [] %}
-    {% for c in t.comments %}
-      {% if c.author == user or c.share_status == 'shared' %}
-        {% if shown.append(c) %}{% endif %}
-      {% endif %}
-    {% endfor %}
-    {% if shown %}
-      <div class="comments">
-        {% for c in shown %}
-          <div class="comment">
-            <div class="author-chip">{{ display_for(c.author) }} · {{ c.created_at|when }}</div>
-            <div class="body">{{ c.body }}</div>
-          </div>
-        {% endfor %}
+    {% for c in t.comments if c.author == user or c.share_status == 'shared' %}
+      {% if loop.first %}<div class="comments">{% endif %}
+      <div class="comment">
+        <div class="author-chip">{{ display_for(c.author) }} · {{ c.created_at|when }}</div>
+        <div class="body">{{ c.body }}</div>
       </div>
-    {% endif %}
+      {% if loop.last %}</div>{% endif %}
+    {% endfor %}
 
     {% if t.share_status == 'shared' and t.messages %}
-      <div class="comments" style="margin-top:12px;">
+      <div class="comments archive-chat">
         <p class="meta">Chat</p>
         {% for m in t.messages %}
           <div class="comment">

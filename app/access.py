@@ -37,6 +37,12 @@ def writing_open(user: str, writing: Writing) -> bool:
     return writing.share_status == "shared"
 
 
+def comment_visible(user: str, comment: Comment) -> bool:
+    if comment.author == user:
+        return True
+    return comment.share_status in {"offered", "shared"}
+
+
 def comment_open(user: str, comment: Comment) -> bool:
     if comment.author == user:
         return True

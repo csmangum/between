@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -15,14 +18,29 @@
       </a>
       <nav class="nav">
         {% if user %}
-          <a href="/">Topics</a>
+          <a href="/">Desk</a>
+          {% if sealed_count %}
+            <a class="nav-badge" href="/#incoming">
+              Offers
+              <span class="count">{{ sealed_count }}</span>
+            </a>
+          {% endif %}
           <a href="/archive">Archive</a>
           <span class="who">{{ display }}</span>
           <form method="post" action="/logout"><button class="ghost" type="submit">Leave</button></form>
         {% endif %}
       </nav>
     </header>
-    {% block body %}{% endblock %}
+    {% if flashes %}
+      <div class="flashes" role="status">
+        {% for flash in flashes %}
+          <div class="flash {{ flash.kind }}">{{ flash.message }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <div class="page-enter">
+      {% block body %}{% endblock %}
+    </div>
   </div>
   {% block scripts %}{% endblock %}
 </body>

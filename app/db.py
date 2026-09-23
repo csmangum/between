@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 
@@ -25,14 +25,15 @@ engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=Tr
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 if DATABASE_URL.startswith("sqlite"):
-    from sqlalchemy import event
 
     @event.listens_for(engine, "connect")
     def _sqlite_pragmas(dbapi_connection, _connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA busy_timeout=5000")
         try:
-            cursor.execute("PRAGMA journal_mode=MEMORY")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA foreign_keys=ON")
         except Exception:
             pass
         cursor.close()
@@ -42,7 +43,6 @@ def migrate() -> None:
     """Add share columns to an existing local SQLite file."""
     if not DATABASE_URL.startswith("sqlite"):
         return
-    from sqlalchemy import text
 
     extras = {
         "topics": [

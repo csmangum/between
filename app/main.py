@@ -3,16 +3,14 @@ from __future__ import annotations
 import json
 import os
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 import bleach
 import markdown
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -20,9 +18,13 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import access, agent, auth, store
+from . import access, agent, auth, share, store
 from .db import Base, SessionLocal, engine, get_db, migrate
+from .hub import hub
 from .models import ChatMessage, Comment, Topic, Writing, utcnow
+from .share import ShareStatus
+
+load_dotenv()
 
 APP_NAME = os.getenv("APP_NAME", "Between")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-change-me")
@@ -60,7 +62,14 @@ ALLOWED_ATTRS = {
     "img": ["src", "alt", "title"],
 }
 
-app = FastAPI(title=APP_NAME)
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title=APP_NAME, lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax", https_only=False)
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -86,6 +95,7 @@ def fmt_dt(value: datetime | None) -> str:
 
 templates.env.filters["md"] = md
 templates.env.filters["when"] = fmt_dt
+templates.env.filters["share_label"] = share.label
 templates.env.globals["app_name"] = APP_NAME
 templates.env.globals["display_for"] = auth.display_for
 
@@ -94,14 +104,6 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     migrate()
     auth.load_people()
-
-
-init_db()
-
-
-@app.on_event("startup")
-def startup() -> None:
-    init_db()
 
 
 def current_user(request: Request) -> str | None:
@@ -125,6 +127,30 @@ async def redirect_needed(_, exc: RedirectNeeded):
     return RedirectResponse(exc.url, status_code=303)
 
 
+def flash(request: Request, message: str, kind: str = "ok") -> None:
+    flashes = request.session.get("flashes") or []
+    flashes.append({"message": message, "kind": kind})
+    request.session["flashes"] = flashes
+
+
+def pop_flashes(request: Request) -> list[dict[str, str]]:
+    return list(request.session.pop("flashes", []) or [])
+
+
+def sealed_offer_count(user: str | None) -> int:
+    if not user:
+        return 0
+    db = SessionLocal()
+    try:
+        return (
+            db.query(Topic)
+            .filter(Topic.created_by != user, Topic.share_status == "offered")
+            .count()
+        )
+    finally:
+        db.close()
+
+
 def ctx(request: Request, **extra: Any) -> dict[str, Any]:
     user = current_user(request)
     people = auth.load_people()
@@ -135,12 +161,26 @@ def ctx(request: Request, **extra: Any) -> dict[str, Any]:
         "other": next((p.display for name, p in people.items() if name != user), None) if user else None,
         "other_user": access.other_username(user) if user else None,
         "people": people,
+        "flashes": pop_flashes(request),
+        "sealed_count": extra.pop("sealed_count", sealed_offer_count(user)),
         **extra,
     }
 
 
 def render(request: Request, name: str, status_code: int = 200, **extra: Any):
     return templates.TemplateResponse(request, name, ctx(request, **extra), status_code=status_code)
+
+
+def _apply_status(obj, status: ShareStatus) -> None:
+    share.set_status(obj, status)
+
+
+def _topic_anchor(topic_id: int, writing_id: int | None = None, fragment: str | None = None) -> str:
+    if writing_id:
+        return f"/topics/{topic_id}#writing-{writing_id}"
+    if fragment:
+        return f"/topics/{topic_id}#{fragment}"
+    return f"/topics/{topic_id}"
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -192,6 +232,7 @@ def create_topic(
     db.add(topic)
     db.commit()
     store.write_local(topic)
+    flash(request, "Kept on your desk.")
     return RedirectResponse(f"/topics/{topic.id}", status_code=303)
 
 
@@ -207,7 +248,7 @@ def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)):
     visible_writings = [w for w in topic.writings if access.writing_visible(user, w)]
     comments_by_writing: dict[int | None, list[Comment]] = defaultdict(list)
     for c in topic.comments:
-        if access.comment_open(user, c) or (c.author != user and c.share_status == "offered"):
+        if access.comment_visible(user, c):
             comments_by_writing[c.writing_id].append(c)
     return render(
         request,
@@ -244,6 +285,7 @@ def add_writing(
     db.add(writing)
     db.commit()
     store.write_local(topic, writing)
+    flash(request, "Writing saved to your desk.")
     return RedirectResponse(f"/topics/{topic_id}#writing-{writing.id}", status_code=303)
 
 
@@ -275,31 +317,21 @@ def add_comment(
     topic.updated_at = utcnow()
     db.add(comment)
     db.commit()
-    anchor = f"#writing-{writing_id}" if writing_id else "#comments"
-    return RedirectResponse(f"/topics/{topic_id}{anchor}", status_code=303)
-
-
-def _set_status(obj, status: str) -> None:
-    obj.share_status = status
-    if status == "offered":
-        obj.offered_at = utcnow()
-        obj.accepted_at = None
-    elif status == "shared":
-        obj.accepted_at = utcnow()
-    elif status == "private":
-        obj.offered_at = None
-        obj.accepted_at = None
+    flash(request, "Comment kept private.")
+    return RedirectResponse(_topic_anchor(topic_id, writing_id, "comments"), status_code=303)
 
 
 @app.post("/topics/{topic_id}/offer")
 def offer_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
     topic = db.get(Topic, topic_id)
-    if topic and topic.created_by == user:
-        _set_status(topic, "offered")
+    other = auth.display_for(access.other_username(user) or "")
+    if topic and topic.created_by == user and topic.share_status == "private":
+        _apply_status(topic, "offered")
         topic.updated_at = utcnow()
         db.commit()
         store.write_local(topic)
+        flash(request, f"Offered to {other}. Waiting for them to open it.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
@@ -308,10 +340,11 @@ def accept_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
     user = require_user(request)
     topic = db.get(Topic, topic_id)
     if topic and topic.created_by != user and topic.share_status == "offered":
-        _set_status(topic, "shared")
+        _apply_status(topic, "shared")
         topic.updated_at = utcnow()
         db.commit()
         store.write_shared(topic)
+        flash(request, "Opened. This topic is on the table between you.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
@@ -320,10 +353,11 @@ def decline_topic(request: Request, topic_id: int, db: Session = Depends(get_db)
     user = require_user(request)
     topic = db.get(Topic, topic_id)
     if topic and topic.created_by != user and topic.share_status == "offered":
-        _set_status(topic, "private")
+        _apply_status(topic, "private")
         topic.updated_at = utcnow()
         db.commit()
         store.write_local(topic)
+        flash(request, "Declined. The offer returned to their desk.")
         return RedirectResponse("/", status_code=303)
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
@@ -332,11 +366,12 @@ def decline_topic(request: Request, topic_id: int, db: Session = Depends(get_db)
 def revoke_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
     topic = db.get(Topic, topic_id)
-    if topic and topic.created_by == user:
-        _set_status(topic, "private")
+    if topic and topic.created_by == user and topic.share_status in {"offered", "shared"}:
+        _apply_status(topic, "private")
         topic.updated_at = utcnow()
         db.commit()
         store.write_local(topic)
+        flash(request, "Pulled back. The topic is on your desk again.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
@@ -344,13 +379,16 @@ def revoke_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
 def offer_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
     writing = db.get(Writing, writing_id)
-    if writing and writing.author == user:
+    other = auth.display_for(access.other_username(user) or "")
+    if writing and writing.author == user and writing.share_status == "private":
         if writing.topic.share_status != "shared":
+            flash(request, "Share the topic first, then offer this writing.", "warn")
             return RedirectResponse(f"/topics/{writing.topic_id}", status_code=303)
-        _set_status(writing, "offered")
+        _apply_status(writing, "offered")
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_local(writing.topic, writing)
+        flash(request, f"Writing offered to {other}.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
 
 
@@ -359,22 +397,37 @@ def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if writing and writing.author != user and writing.share_status == "offered":
-        _set_status(writing, "shared")
+        _apply_status(writing, "shared")
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_shared(writing.topic, writing)
+        flash(request, "Opened. The writing is on the table.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
+
+
+@app.post("/writings/{writing_id}/decline")
+def decline_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    writing = db.get(Writing, writing_id)
+    if writing and writing.author != user and writing.share_status == "offered":
+        _apply_status(writing, "private")
+        writing.topic.updated_at = utcnow()
+        db.commit()
+        store.write_local(writing.topic, writing)
+        flash(request, "Declined. The writing returned to their desk.")
+    return RedirectResponse(f"/topics/{writing.topic_id}", status_code=303)
 
 
 @app.post("/writings/{writing_id}/revoke")
 def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
     writing = db.get(Writing, writing_id)
-    if writing and writing.author == user:
-        _set_status(writing, "private")
+    if writing and writing.author == user and writing.share_status in {"offered", "shared"}:
+        _apply_status(writing, "private")
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_local(writing.topic, writing)
+        flash(request, "Pulled back. The writing is private again.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
 
 
@@ -382,25 +435,57 @@ def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_
 def offer_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
     comment = db.get(Comment, comment_id)
-    if comment and comment.author == user and comment.topic.share_status == "shared":
-        _set_status(comment, "offered")
+    if not comment:
+        return RedirectResponse("/", status_code=303)
+    if comment.author == user and comment.share_status == "private" and comment.topic.share_status == "shared":
+        _apply_status(comment, "offered")
         comment.topic.updated_at = utcnow()
         db.commit()
-    anchor = f"#writing-{comment.writing_id}" if comment.writing_id else "#comments"
-    return RedirectResponse(f"/topics/{comment.topic_id}{anchor}", status_code=303)
+        flash(request, "Comment offered.")
+    return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
 
 
 @app.post("/comments/{comment_id}/accept")
 def accept_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
     comment = db.get(Comment, comment_id)
-    if comment and comment.author != user and comment.share_status == "offered":
-        _set_status(comment, "shared")
+    if not comment:
+        return RedirectResponse("/", status_code=303)
+    if comment.author != user and comment.share_status == "offered":
+        _apply_status(comment, "shared")
         comment.topic.updated_at = utcnow()
         db.commit()
         store.write_shared(comment.topic, comment=comment)
-    anchor = f"#writing-{comment.writing_id}" if comment.writing_id else "#comments"
-    return RedirectResponse(f"/topics/{comment.topic_id}{anchor}", status_code=303)
+        flash(request, "Comment opened.")
+    return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
+
+
+@app.post("/comments/{comment_id}/decline")
+def decline_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    comment = db.get(Comment, comment_id)
+    if not comment:
+        return RedirectResponse("/", status_code=303)
+    if comment.author != user and comment.share_status == "offered":
+        _apply_status(comment, "private")
+        comment.topic.updated_at = utcnow()
+        db.commit()
+        flash(request, "Declined. The comment returned to their desk.")
+    return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
+
+
+@app.post("/comments/{comment_id}/revoke")
+def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    comment = db.get(Comment, comment_id)
+    if not comment:
+        return RedirectResponse("/", status_code=303)
+    if comment.author == user and comment.share_status in {"offered", "shared"}:
+        _apply_status(comment, "private")
+        comment.topic.updated_at = utcnow()
+        db.commit()
+        flash(request, "Pulled back. The comment is private again.")
+    return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
 
 
 @app.get("/archive", response_class=HTMLResponse)
@@ -511,60 +596,6 @@ def export_md(request: Request, db: Session = Depends(get_db)):
     )
 
 
-class Seat:
-    def __init__(self, ws: WebSocket, user: str):
-        self.ws = ws
-        self.user = user
-        self.typing = False
-
-
-class Hub:
-    def __init__(self) -> None:
-        self.rooms: dict[int, dict[int, Seat]] = defaultdict(dict)
-
-    async def join(self, topic_id: int, ws: WebSocket, user: str) -> None:
-        await ws.accept()
-        self.rooms[topic_id][id(ws)] = Seat(ws, user)
-        await self.broadcast_presence(topic_id)
-
-    def leave(self, topic_id: int, ws: WebSocket) -> None:
-        self.rooms[topic_id].pop(id(ws), None)
-        if not self.rooms[topic_id]:
-            self.rooms.pop(topic_id, None)
-
-    def set_typing(self, topic_id: int, ws: WebSocket, typing: bool) -> None:
-        seat = self.rooms[topic_id].get(id(ws))
-        if seat:
-            seat.typing = typing
-
-    def presence(self, topic_id: int) -> dict:
-        seats = list(self.rooms.get(topic_id, {}).values())
-        seen: dict[str, bool] = {}
-        for seat in seats:
-            seen[seat.user] = seen.get(seat.user, False) or seat.typing
-        return {
-            "type": "presence",
-            "here": [{"user": name, "display": auth.display_for(name)} for name in seen],
-            "typing": [auth.display_for(name) for name, flag in seen.items() if flag],
-        }
-
-    async def broadcast(self, topic_id: int, payload: dict) -> None:
-        dead = []
-        for key, seat in list(self.rooms.get(topic_id, {}).items()):
-            try:
-                await seat.ws.send_json(payload)
-            except Exception:
-                dead.append(key)
-        for key in dead:
-            self.rooms[topic_id].pop(key, None)
-
-    async def broadcast_presence(self, topic_id: int) -> None:
-        await self.broadcast(topic_id, self.presence(topic_id))
-
-
-hub = Hub()
-
-
 @app.post("/topics/{topic_id}/draft")
 def draft_reply(request: Request, topic_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
@@ -587,6 +618,7 @@ def draft_reply(request: Request, topic_id: int, db: Session = Depends(get_db)):
     db.add(writing)
     db.commit()
     store.write_local(topic, writing)
+    flash(request, "A private draft was saved to your desk.")
     return RedirectResponse(f"/topics/{topic_id}?agent=ok#writing-{writing.id}", status_code=303)
 
 

@@ -18,7 +18,6 @@ Chat on a topic stays closed until the *topic itself* is offered and accepted. C
 ## Quick start (local)
 
 ```bash
-cd between
 cp .env.example .env
 # edit the two accounts and SECRET_KEY
 chmod +x run.sh

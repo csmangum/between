@@ -1,7 +1,7 @@
 # Between — Design Document
 
-**Status:** first draft
-**Date:** 2026-09-22
+**Status:** polished draft (UI + consent flows)
+**Date:** 2026-09-23
 **Implements:** the running app in this repo
 **Audience:** the two people who will use it, and anyone who extends it
 
@@ -307,11 +307,14 @@ Status returns to private. B loses the body on the next load. B may still have a
 |---|---|
 | People | `app/auth.py` |
 | Predicates visible / open | `app/access.py` |
+| Share status + UI labels | `app/share.py` |
 | Tables | `app/models.py` |
 | Markdown mirrors | `app/store.py` |
-| Routes, chat hub, export | `app/main.py` |
+| Routes, export, flashes | `app/main.py` |
+| Chat presence hub | `app/hub.py` |
 | Schema add-ons | `app/db.py` `migrate()` |
 | Desk / consent / topic UI | `app/templates/` |
+| Chat client | `app/static/chat.js` |
 
 If a change touches “who can see this,” it belongs in `access.py` first, then the template. Do not sprinkle status checks only in Jinja.
 

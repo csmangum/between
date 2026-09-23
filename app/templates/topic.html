@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ topic.title }} · {{ app_name }}{% endblock %}
 {% block body %}
-<p class="meta"><a href="/">← Topics</a></p>
+<p class="meta"><a href="/">← Desk</a></p>
 <h1 class="page-title">{{ topic.title }}</h1>
 {% if topic.prompt %}<p class="lede">{{ topic.prompt }}</p>{% endif %}
 <p class="meta">
   Opened by {{ display_for(topic.created_by) }} · {{ topic.created_at|when }}
-  · <span class="badge {{ topic.share_status }}">{{ topic.share_status }}</span>
+  · <span class="badge {{ topic.share_status }}">{{ topic.share_status|share_label }}</span>
 </p>
 
 {% if topic.created_by == user %}
@@ -35,7 +35,7 @@
         <div class="author-chip">
           <span class="dot{% if w.author != user %} them{% endif %}"></span>
           {{ display_for(w.author) }} · {{ w.created_at|when }}
-          · <span class="badge {{ w.share_status }}">{{ w.share_status }}</span>
+          · <span class="badge {{ w.share_status }}">{{ w.share_status|share_label }}</span>
         </div>
 
         {% if w.author == user or w.share_status == 'shared' %}
@@ -68,15 +68,25 @@
               <div class="comment">
                 <div class="author-chip">
                   {{ display_for(c.author) }} · {{ c.created_at|when }}
-                  · <span class="badge {{ c.share_status }}">{{ c.share_status }}</span>
+                  · <span class="badge {{ c.share_status }}">{{ c.share_status|share_label }}</span>
                 </div>
                 {% if c.author == user or c.share_status == 'shared' %}
                   <div class="body">{{ c.body }}</div>
+                  {% if c.author == user and c.share_status in ['offered', 'shared'] %}
+                    <form method="post" action="/comments/{{ c.id }}/revoke">
+                      <button class="ghost" type="submit">Pull comment back</button>
+                    </form>
+                  {% endif %}
                 {% else %}
                   <div class="body sealed">A comment was offered. Agree to read it.</div>
-                  <form method="post" action="/comments/{{ c.id }}/accept">
-                    <button type="submit">Agree to read comment</button>
-                  </form>
+                  <div class="actions">
+                    <form method="post" action="/comments/{{ c.id }}/accept">
+                      <button type="submit">Agree to read comment</button>
+                    </form>
+                    <form method="post" action="/comments/{{ c.id }}/decline">
+                      <button class="ghost" type="submit">Decline</button>
+                    </form>
+                  </div>
                 {% endif %}
                 {% if c.author == user and c.share_status == 'private' and topic_shared %}
                   <form method="post" action="/comments/{{ c.id }}/offer">
@@ -97,18 +107,23 @@
         {% else %}
           <h3>{{ w.title or "A writing" }}</h3>
           <p class="sealed">{{ display_for(w.author) }} offered this writing. The body stays hidden until you agree.</p>
-          <form method="post" action="/writings/{{ w.id }}/accept">
-            <button type="submit">Agree and read</button>
-          </form>
+          <div class="actions">
+            <form method="post" action="/writings/{{ w.id }}/accept">
+              <button type="submit">Agree and read</button>
+            </form>
+            <form method="post" action="/writings/{{ w.id }}/decline">
+              <button class="ghost" type="submit">Decline</button>
+            </form>
+          </div>
         {% endif %}
       </article>
     {% else %}
       <p class="empty">No writings on this topic yet.</p>
     {% endfor %}
 
-    <section class="card" style="margin-top:28px;" id="write">
-      <h2 style="font-family:var(--serif);font-weight:500;margin-top:0;">Write privately</h2>
-      <p class="meta">Saved to <code>data/local/{{ user }}</code>. {{ other }} cannot see it until you offer it and they accept.</p>
+    <section class="panel compose-gap" id="write">
+      <h2 class="compose-title">Write privately</h2>
+      <p class="panel-note">Saved to <code>data/local/{{ user }}</code>. {{ other }} cannot see it until you offer it and they accept.</p>
       {% if agent_note == 'ok' %}
         <p class="meta">A draft was saved on your desk. It is still private.</p>
       {% elif agent_note == 'missing' %}
@@ -117,12 +132,12 @@
         <p class="error">The draft could not be written. Check the model endpoint and try again.</p>
       {% endif %}
       {% if agent_ready %}
-        <form method="post" action="/topics/{{ topic.id }}/draft" style="margin-bottom:14px;">
+        <form method="post" action="/topics/{{ topic.id }}/draft" class="agent-draft">
           <button class="ghost" type="submit">Draft a reply from the readable record</button>
         </form>
-        <p class="meta">The agent sees only what you can already read — never the other person's private desk. The draft stays yours until you offer it.</p>
+        <p class="panel-note">The agent sees only what you can already read — never the other person's private desk.</p>
       {% else %}
-        <p class="meta">To let an agent draft a reply, set <code>XAI_API_KEY</code> or <code>AGENT_API_KEY</code> in <code>.env</code>.</p>
+        <p class="panel-note">To let an agent draft a reply, set <code>XAI_API_KEY</code> or <code>AGENT_API_KEY</code> in <code>.env</code>.</p>
       {% endif %}
       <form method="post" action="/topics/{{ topic.id }}/writings">
         <label for="wtitle">Title</label>
@@ -133,22 +148,32 @@
       </form>
     </section>
 
-    <section class="card" style="margin-top:18px;" id="comments">
-      <h2 style="font-family:var(--serif);font-weight:500;margin-top:0;">Topic-level comments</h2>
+    <section class="panel compose-gap-sm" id="comments">
+      <h2 class="compose-title">Topic-level comments</h2>
       {% set loose = comments_by_writing.get(None, []) %}
       {% for c in loose %}
         <div class="comment">
           <div class="author-chip">
             {{ display_for(c.author) }} · {{ c.created_at|when }}
-            · <span class="badge {{ c.share_status }}">{{ c.share_status }}</span>
+            · <span class="badge {{ c.share_status }}">{{ c.share_status|share_label }}</span>
           </div>
           {% if c.author == user or c.share_status == 'shared' %}
             <div class="body">{{ c.body }}</div>
+            {% if c.author == user and c.share_status in ['offered', 'shared'] %}
+              <form method="post" action="/comments/{{ c.id }}/revoke">
+                <button class="ghost" type="submit">Pull comment back</button>
+              </form>
+            {% endif %}
           {% else %}
             <div class="body sealed">Offered comment — hidden until you agree.</div>
-            <form method="post" action="/comments/{{ c.id }}/accept">
-              <button type="submit">Agree and read</button>
-            </form>
+            <div class="actions">
+              <form method="post" action="/comments/{{ c.id }}/accept">
+                <button type="submit">Agree and read</button>
+              </form>
+              <form method="post" action="/comments/{{ c.id }}/decline">
+                <button class="ghost" type="submit">Decline</button>
+              </form>
+            </div>
           {% endif %}
           {% if c.author == user and c.share_status == 'private' and topic_shared %}
             <form method="post" action="/comments/{{ c.id }}/offer">
@@ -165,10 +190,10 @@
     </section>
   </main>
 
-  <aside class="card chat-panel">
-    <h2 style="font-family:var(--serif);font-weight:500;margin:0 0 12px;">Live margin</h2>
+  <aside class="panel chat-panel">
+    <h2 class="compose-title">Live margin</h2>
     {% if topic_shared %}
-      <p class="meta">Chat is the shared layer. It only exists after both of you agreed this topic is on the table.</p>
+      <p class="panel-note">Chat is the shared layer. It only exists after both of you agreed this topic is on the table.</p>
       <div id="presence" class="presence">Connecting…</div>
       <div id="chat-log" class="chat-log">
         {% for m in topic.messages %}
@@ -178,7 +203,7 @@
           </div>
         {% endfor %}
       </div>
-      <form id="chat-form" style="margin-top:12px;">
+      <form id="chat-form" class="chat-compose">
         <textarea class="chat-input" id="chat-body" placeholder="Say it here." required></textarea>
         <button class="full" type="submit">Send</button>
       </form>
@@ -192,64 +217,12 @@
 {% block scripts %}
 {% if topic_shared %}
 <script>
-  const topicId = {{ topic.id }};
-  const me = {{ user|tojson }};
-  const log = document.getElementById("chat-log");
-  const form = document.getElementById("chat-form");
-  const input = document.getElementById("chat-body");
-  const presence = document.getElementById("presence");
-  const proto = location.protocol === "https:" ? "wss" : "ws";
-  const ws = new WebSocket(`${proto}://${location.host}/ws/topics/${topicId}`);
-  let typingTimer = null;
-  let typingOn = false;
-
-  function addBubble(msg) {
-    const el = document.createElement("div");
-    el.className = "bubble" + (msg.author === me ? " mine" : "");
-    el.innerHTML = `<div class="who">${msg.display} · ${msg.created_at}</div><div></div>`;
-    el.lastChild.textContent = msg.body;
-    log.appendChild(el);
-    log.scrollTop = log.scrollHeight;
-  }
-
-  function showPresence(msg) {
-    const names = (msg.here || []).map((p) => p.display);
-    const here = names.length ? names.join(" · ") : "Empty room";
-    const typing = (msg.typing || []).filter((name) => name);
-    const othersTyping = typing.filter((name) => {
-      const mine = {{ display|tojson }};
-      return name !== mine;
-    });
-    presence.textContent = othersTyping.length
-      ? here + " — " + othersTyping.join(", ") + " typing"
-      : here + " here";
-  }
-
-  function sendTyping(on) {
-    if (ws.readyState !== 1 || typingOn === on) return;
-    typingOn = on;
-    ws.send(JSON.stringify({ type: "typing", on }));
-  }
-
-  ws.addEventListener("message", (event) => {
-    const msg = JSON.parse(event.data);
-    if (msg.type === "presence") showPresence(msg);
-    else if (msg.body) addBubble(msg);
-  });
-  input.addEventListener("input", () => {
-    sendTyping(true);
-    clearTimeout(typingTimer);
-    typingTimer = setTimeout(() => sendTyping(false), 1200);
-  });
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    const body = input.value.trim();
-    if (!body || ws.readyState !== 1) return;
-    sendTyping(false);
-    ws.send(JSON.stringify({ type: "chat", body }));
-    input.value = "";
-  });
-  log.scrollTop = log.scrollHeight;
+  window.BetweenChat = {
+    topicId: {{ topic.id }},
+    me: {{ user|tojson }},
+    display: {{ display|tojson }},
+  };
 </script>
+<script src="/static/chat.js" defer></script>
 {% endif %}
 {% endblock %}
