@@ -37,7 +37,7 @@
     {% endfor %}
 
     {% for c in t.comments if c.author == user or c.share_status == 'shared' %}
-      {% if loop.first %}<div class="comments">{% endif %}
+      {% if loop.first %}<div class="comments"><p class="meta">Notes</p>{% endif %}
       <div class="comment">
         <div class="author-chip">{{ display_for(c.author) }} · {{ c.created_at|when_soft }}</div>
         <div class="body">{{ c.body }}</div>

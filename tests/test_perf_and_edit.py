@@ -94,7 +94,7 @@ def test_shared_counts_hide_private_drafts(client, db_session: Session):
     home = client.get("/")
     assert home.status_code == 200
     assert "Letters" in home.text
-    assert "1 writings" in home.text
+    assert "1 writing" in home.text
     assert "2 writings" not in home.text
 
 

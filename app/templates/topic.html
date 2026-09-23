@@ -68,9 +68,9 @@
                 <summary>Edit on your desk</summary>
                 <form method="post" action="/writings/{{ w.id }}/edit" class="edit-form">
                   <label for="edit-title-{{ w.id }}">Title</label>
-                  <input id="edit-title-{{ w.id }}" name="title" type="text" value="{{ w.title }}">
+                  <input id="edit-title-{{ w.id }}" name="title" type="text" value="{{ w.title }}" data-desk>
                   <label for="edit-body-{{ w.id }}">Writing</label>
-                  <textarea id="edit-body-{{ w.id }}" name="body" required>{{ w.body }}</textarea>
+                  <textarea id="edit-body-{{ w.id }}" name="body" required data-desk>{{ w.body }}</textarea>
                   <button type="submit">Save changes</button>
                 </form>
               </details>
@@ -113,8 +113,8 @@
             {% if w.share_status == 'shared' or w.author == user %}
               <form method="post" action="/topics/{{ topic.id }}/comments">
                 <input type="hidden" name="writing_id" value="{{ w.id }}">
-                <label>Private note</label>
-                <textarea name="body" required placeholder="Stays on your side until you send it."></textarea>
+                <label for="note-{{ w.id }}">Private note</label>
+                <textarea id="note-{{ w.id }}" name="body" required data-desk placeholder="Stays on your side until you send it."></textarea>
                 <button type="submit">Keep note</button>
               </form>
             {% endif %}
@@ -156,9 +156,9 @@
       {% endif %}
       <form method="post" action="/topics/{{ topic.id }}/writings">
         <label for="wtitle">Title</label>
-        <input id="wtitle" name="title" type="text" placeholder="Optional heading">
+        <input id="wtitle" name="title" type="text" data-desk placeholder="Optional heading">
         <label for="wbody">Writing</label>
-        <textarea id="wbody" name="body" required placeholder="Take your time. Markdown is fine."></textarea>
+        <textarea id="wbody" name="body" required data-desk placeholder="Take your time. Markdown is fine."></textarea>
         <button type="submit">Save to my desk</button>
       </form>
     </section>
@@ -198,8 +198,8 @@
         </div>
       {% endfor %}
       <form method="post" action="/topics/{{ topic.id }}/comments">
-        <label>Private note on the topic</label>
-        <textarea name="body" required placeholder="Stays with you until you send it."></textarea>
+        <label for="topic-note">Private note on the topic</label>
+        <textarea id="topic-note" name="body" required data-desk placeholder="Stays with you until you send it."></textarea>
         <button type="submit">Keep note</button>
       </form>
     </section>
@@ -209,19 +209,23 @@
     <h2 class="compose-title">Live margin</h2>
     {% if topic_shared %}
       <p class="panel-note">A quiet place to speak once this topic sits between you.</p>
-      <div id="presence" class="presence">Connecting…</div>
-      <div id="chat-log" class="chat-log">
+      <div id="presence" class="presence" aria-live="polite">Opening the margin…</div>
+      <div id="chat-log" class="chat-log" role="log" aria-relevant="additions" aria-label="Live margin">
         {% for m in topic.messages %}
           <div class="bubble{% if m.author == user %} mine{% endif %}">
             <div class="who">{{ display_for(m.author) }} · {{ m.created_at|when_soft }}</div>
             <div>{{ m.body }}</div>
           </div>
+        {% else %}
+          <p id="chat-empty" class="chat-empty">Nothing in the margin yet. A few words are enough.</p>
         {% endfor %}
       </div>
       <form id="chat-form" class="chat-compose">
         <label for="chat-body">Message in the live margin</label>
-        <textarea class="chat-input" id="chat-body" placeholder="A few words in the margin." required></textarea>
+        <textarea class="chat-input" id="chat-body" placeholder="A few words in the margin." enterkeyhint="send" required></textarea>
+        <p id="chat-limit" class="chat-hint" hidden></p>
         <button class="full" type="submit">Send</button>
+        <p class="chat-hint">Enter sends. Shift+Enter keeps a new line.</p>
       </form>
     {% else %}
       <p class="sealed">The margin stays closed until you both open this topic.</p>
