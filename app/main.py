@@ -464,7 +464,9 @@ def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_
     writing = db.get(Writing, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
-    if writing.author != user and writing.share_status == "offered" and writing.topic.share_status == "shared":
+    if writing.author != user and writing.share_status == "offered":
+        if writing.topic.share_status != "shared":
+            return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
         _apply_status(writing, "shared")
         writing.topic.updated_at = utcnow()
         db.commit()
@@ -479,7 +481,9 @@ def decline_writing(request: Request, writing_id: int, db: Session = Depends(get
     writing = db.get(Writing, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
-    if writing.author != user and writing.share_status == "offered" and writing.topic.share_status == "shared":
+    if writing.author != user and writing.share_status == "offered":
+        if writing.topic.share_status != "shared":
+            return RedirectResponse(f"/topics/{writing.topic_id}", status_code=303)
         _apply_status(writing, "private")
         writing.topic.updated_at = utcnow()
         db.commit()
@@ -551,7 +555,9 @@ def accept_comment(request: Request, comment_id: int, db: Session = Depends(get_
     comment = db.get(Comment, comment_id)
     if not comment:
         return RedirectResponse("/", status_code=303)
-    if comment.author != user and comment.share_status == "offered" and comment.topic.share_status == "shared":
+    if comment.author != user and comment.share_status == "offered":
+        if comment.topic.share_status != "shared":
+            return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
         _apply_status(comment, "shared")
         comment.topic.updated_at = utcnow()
         db.commit()
@@ -566,7 +572,9 @@ def decline_comment(request: Request, comment_id: int, db: Session = Depends(get
     comment = db.get(Comment, comment_id)
     if not comment:
         return RedirectResponse("/", status_code=303)
-    if comment.author != user and comment.share_status == "offered" and comment.topic.share_status == "shared":
+    if comment.author != user and comment.share_status == "offered":
+        if comment.topic.share_status != "shared":
+            return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
         _apply_status(comment, "private")
         comment.topic.updated_at = utcnow()
         db.commit()

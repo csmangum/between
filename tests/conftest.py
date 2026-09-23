@@ -2,17 +2,15 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
-TEST_ROOT = Path("/tmp/between-tests")
-TEST_ROOT.mkdir(parents=True, exist_ok=True)
+TEST_ROOT = Path(tempfile.mkdtemp(prefix=f"between-tests-{os.getenv('PYTEST_XDIST_WORKER', 'main')}-"))
 TEST_DB = TEST_ROOT / "between.db"
-if TEST_DB.exists():
-    TEST_DB.unlink()
 
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
 os.environ["SECRET_KEY"] = "test-secret"
