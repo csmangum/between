@@ -86,8 +86,12 @@
       else if (msg.body) addBubble(msg);
     });
 
-    ws.addEventListener("close", () => {
+    ws.addEventListener("close", (event) => {
       if (closedOnPurpose) return;
+      if (event.code === 4401 || event.code === 4404) {
+        setStatus("Margin closed");
+        return;
+      }
       scheduleReconnect();
     });
 
