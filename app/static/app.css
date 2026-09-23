@@ -819,6 +819,7 @@ code {
 .edit-form {
   margin-top: 10px;
 }
+.edit-fold .panel-note { margin-top: 10px; }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

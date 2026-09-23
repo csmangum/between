@@ -538,10 +538,12 @@ def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_
     if not writing:
         return RedirectResponse("/", status_code=303)
     if writing.author == user and writing.share_status in {"offered", "shared"}:
+        share.fold_revision_into_private(writing)
         _apply_status(writing, "private")
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_local(writing.topic, writing)
+        store.write_revision(writing)
         flash(request, "Pulled back to your desk.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
 
@@ -559,6 +561,8 @@ def edit_writing(
     writing = db.get(Writing, writing_id)
     if not writing or writing.author != user:
         return RedirectResponse("/", status_code=303)
+    if writing.share_status == "shared":
+        return _save_revision(request, writing, title, body, db)
     if writing.share_status != "private":
         flash(request, "Pull it back to your desk before editing.", "warn")
         return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
@@ -572,6 +576,130 @@ def edit_writing(
     store.write_local(writing.topic, writing)
     flash(request, "Writing updated on your desk.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
+
+
+def _save_revision(request: Request, writing: Writing, title: str, body: str, db: Session):
+    anchor = f"/topics/{writing.topic_id}#writing-{writing.id}"
+    if writing.revision_status == "offered":
+        flash(request, "Pull the revision back before you change it.", "warn")
+        return RedirectResponse(anchor, status_code=303)
+    if not body.strip():
+        flash(request, "A revision needs words before it can stay on your desk.", "warn")
+        return RedirectResponse(anchor, status_code=303)
+    share.save_revision(writing, title.strip(), body.strip())
+    writing.topic.updated_at = utcnow()
+    db.commit()
+    store.write_revision(writing)
+    flash(request, "Revision kept on your desk. They still have the writing they opened.")
+    return RedirectResponse(anchor, status_code=303)
+
+
+@app.post("/writings/{writing_id}/revision")
+def save_writing_revision(
+    request: Request,
+    writing_id: int,
+    title: str = Form(""),
+    body: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    user = require_user(request)
+    writing = db.get(Writing, writing_id)
+    if not writing or writing.author != user or writing.share_status != "shared":
+        return RedirectResponse("/", status_code=303)
+    return _save_revision(request, writing, title, body, db)
+
+
+@app.post("/writings/{writing_id}/revision/offer")
+def offer_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    writing = db.get(Writing, writing_id)
+    if not writing:
+        return RedirectResponse("/", status_code=303)
+    anchor = f"/topics/{writing.topic_id}#writing-{writing_id}"
+    other = auth.display_for(access.other_username(user) or "")
+    if (
+        writing.author == user
+        and writing.share_status == "shared"
+        and writing.revision_status == "private"
+        and writing.topic.share_status == "shared"
+    ):
+        share.offer_revision(writing)
+        writing.topic.updated_at = utcnow()
+        db.commit()
+        store.write_revision(writing)
+        flash(request, f"Revision sealed for {other}. The writing they opened stays until they open this.")
+    return RedirectResponse(anchor, status_code=303)
+
+
+@app.post("/writings/{writing_id}/revision/accept")
+def accept_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    writing = db.get(Writing, writing_id)
+    if not writing:
+        return RedirectResponse("/", status_code=303)
+    anchor = f"/topics/{writing.topic_id}#writing-{writing_id}"
+    if (
+        writing.author != user
+        and writing.share_status == "shared"
+        and writing.revision_status == "offered"
+        and writing.topic.share_status == "shared"
+    ):
+        share.accept_revision(writing)
+        writing.topic.updated_at = utcnow()
+        db.commit()
+        store.write_shared(writing.topic, writing)
+        store.write_local(writing.topic, writing)
+        store.write_revision(writing)
+        flash(request, "Opened. This revision is now the writing you keep.")
+    return RedirectResponse(anchor, status_code=303)
+
+
+@app.post("/writings/{writing_id}/revision/decline")
+def decline_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    writing = db.get(Writing, writing_id)
+    if not writing:
+        return RedirectResponse("/", status_code=303)
+    anchor = f"/topics/{writing.topic_id}#writing-{writing_id}"
+    if writing.author != user and writing.revision_status == "offered" and writing.topic.share_status == "shared":
+        share.return_revision(writing)
+        writing.topic.updated_at = utcnow()
+        db.commit()
+        store.write_revision(writing)
+        flash(request, "Left unopened. The revision returned to their desk. The writing you have stays.")
+    return RedirectResponse(anchor, status_code=303)
+
+
+@app.post("/writings/{writing_id}/revision/revoke")
+def revoke_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    writing = db.get(Writing, writing_id)
+    if not writing:
+        return RedirectResponse("/", status_code=303)
+    anchor = f"/topics/{writing.topic_id}#writing-{writing_id}"
+    if writing.author == user and writing.revision_status == "offered":
+        share.return_revision(writing)
+        writing.topic.updated_at = utcnow()
+        db.commit()
+        store.write_revision(writing)
+        flash(request, "Revision pulled back. They still have the writing they opened.")
+    return RedirectResponse(anchor, status_code=303)
+
+
+@app.post("/writings/{writing_id}/revision/discard")
+def discard_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    writing = db.get(Writing, writing_id)
+    if not writing:
+        return RedirectResponse("/", status_code=303)
+    anchor = f"/topics/{writing.topic_id}#writing-{writing_id}"
+    if writing.author == user and writing.revision_status in {"private", "offered"}:
+        share.clear_revision(writing)
+        writing.topic.updated_at = utcnow()
+        db.commit()
+        store.write_revision(writing)
+        flash(request, "Revision discarded. The writing you both keep is unchanged.")
+    return RedirectResponse(anchor, status_code=303)
 
 
 @app.post("/comments/{comment_id}/offer")

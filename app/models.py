@@ -56,6 +56,10 @@ class Writing(Base):
     share_status: Mapped[str] = mapped_column(String(20), default="private")
     offered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revision_title: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    revision_body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    revision_status: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    revision_offered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
