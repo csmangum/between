@@ -25,11 +25,31 @@ def _topic_dir(base: Path, topic: Topic) -> Path:
     return folder
 
 
-def write_local(topic: Topic, writing: Writing | None = None) -> Path:
+def _stable_writing_path(folder: Path, writing: Writing) -> Path:
+    for legacy in folder.glob(f"writing-{writing.id}-*.md"):
+        legacy.unlink(missing_ok=True)
+    return folder / f"writing-{writing.id}.md"
+
+
+def write_local(topic: Topic, writing: Writing | None = None, comment: Comment | None = None) -> Path:
     """Keep the author's copy on disk. The other person never reads this path."""
-    root = data_root() / "local" / topic.created_by if writing is None else data_root() / "local" / writing.author
+    if writing is not None:
+        root = data_root() / "local" / writing.author
+    elif comment is not None:
+        root = data_root() / "local" / comment.author
+    else:
+        root = data_root() / "local" / topic.created_by
     folder = _topic_dir(root, topic)
     if writing is None:
+        if comment is not None:
+            path = folder / f"comment-{comment.id}.md"
+            path.write_text(
+                f"_author: {comment.author}_\n"
+                f"_status: {comment.share_status}_\n\n"
+                f"{comment.body}\n",
+                encoding="utf-8",
+            )
+            return path
         path = folder / "topic.md"
         path.write_text(
             f"# {topic.title}\n\n"
@@ -38,7 +58,7 @@ def write_local(topic: Topic, writing: Writing | None = None) -> Path:
             encoding="utf-8",
         )
         return path
-    path = folder / f"writing-{writing.id}-{_slug(writing.title or 'note')}.md"
+    path = _stable_writing_path(folder, writing)
     path.write_text(
         f"# {writing.title or 'Untitled writing'}\n\n"
         f"_author: {writing.author}_\n"
@@ -57,7 +77,7 @@ def write_shared(topic: Topic, writing: Writing | None = None, comment: Comment 
     if writing is not None:
         if writing.share_status != "shared":
             return None
-        path = folder / f"writing-{writing.id}-{_slug(writing.title or 'note')}.md"
+        path = _stable_writing_path(folder, writing)
         path.write_text(
             f"# {writing.title or 'Untitled writing'}\n\n"
             f"_author: {writing.author}_\n\n"

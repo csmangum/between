@@ -1,47 +1,12 @@
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session
+from starlette.websockets import WebSocketDisconnect
 
-# Isolate the app DB before importing the application module.
-TEST_DB = Path("/tmp/between-smoke.db")
-if TEST_DB.exists():
-    TEST_DB.unlink()
-os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
-os.environ["SECRET_KEY"] = "test-secret"
-os.environ["USER1_NAME"] = "chris"
-os.environ["USER1_DISPLAY"] = "Chris"
-os.environ["USER1_PASSWORD"] = "pass1"
-os.environ["USER2_NAME"] = "friend"
-os.environ["USER2_DISPLAY"] = "Friend"
-os.environ["USER2_PASSWORD"] = "pass2"
-
-from app.db import Base, engine, get_db  # noqa: E402
-from app.main import app  # noqa: E402
-
-TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-Base.metadata.create_all(bind=engine)
-
-
-def _override_db():
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = _override_db
-
-
-@pytest.fixture()
-def client():
-    with TestClient(app) as c:
-        yield c
+from app.main import app
+from app.models import ChatMessage, Topic
 
 
 def _login(client: TestClient, username: str, password: str) -> None:
@@ -79,6 +44,30 @@ def test_offer_accept_flow(client: TestClient):
     assert opened.status_code == 200
     assert "private note" in opened.text
     assert "kept between you" in opened.text
+    assert 'label for="chat-body"' in opened.text
+
+
+def test_websocket_stops_after_topic_revoke(db_session: Session):
+    with TestClient(app) as author, TestClient(app) as reader:
+        _login(author, "chris", "pass1")
+        created = author.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
+        topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
+        author.post(f"/topics/{topic_id}/offer", follow_redirects=False)
+
+        _login(reader, "friend", "pass2")
+        reader.post(f"/topics/{topic_id}/accept", follow_redirects=False)
+
+        with reader.websocket_connect(f"/ws/topics/{topic_id}") as ws:
+            assert ws.receive_json()["type"] == "presence"
+            author.post(f"/topics/{topic_id}/revoke", follow_redirects=False)
+            ws.send_json({"type": "chat", "body": "still here?"})
+            with pytest.raises(WebSocketDisconnect) as exc:
+                ws.receive_json()
+            assert exc.value.code == 4404
+
+    assert db_session.query(ChatMessage).count() == 0
+    topic = db_session.get(Topic, topic_id)
+    assert topic.share_status == "private"
 
 
 def test_health(client: TestClient):

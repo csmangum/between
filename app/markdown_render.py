@@ -24,7 +24,6 @@ ALLOWED_TAGS = bleach.sanitizer.ALLOWED_TAGS.union(
         "strong",
         "a",
         "br",
-        "img",
         "table",
         "thead",
         "tbody",
@@ -36,7 +35,6 @@ ALLOWED_TAGS = bleach.sanitizer.ALLOWED_TAGS.union(
 ALLOWED_ATTRS = {
     **bleach.sanitizer.ALLOWED_ATTRIBUTES,
     "a": ["href", "title", "rel"],
-    "img": ["src", "alt", "title"],
 }
 
 

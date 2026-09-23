@@ -15,6 +15,7 @@
   let reconnectAttempt = 0;
   let closedOnPurpose = false;
   const pending = [];
+  let reconnectTimer = null;
 
   function addBubble(msg) {
     const el = document.createElement("div");
@@ -54,7 +55,21 @@
     }
   }
 
+  function scheduleReconnect() {
+    if (reconnectTimer !== null) return;
+    const delay = Math.min(10000, 500 * Math.pow(2, reconnectAttempt++));
+    setStatus("Disconnected — retrying…");
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  }
+
   function connect() {
+    if (reconnectTimer !== null) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
     closedOnPurpose = false;
     setStatus(reconnectAttempt ? "Reconnecting…" : "Connecting…");
     ws = new WebSocket(`${proto}://${location.host}/ws/topics/${config.topicId}`);
@@ -73,9 +88,7 @@
 
     ws.addEventListener("close", () => {
       if (closedOnPurpose) return;
-      const delay = Math.min(10000, 500 * Math.pow(2, reconnectAttempt++));
-      setStatus("Disconnected — retrying…");
-      setTimeout(connect, delay);
+      scheduleReconnect();
     });
 
     ws.addEventListener("error", () => {
@@ -104,7 +117,6 @@
     } else {
       pending.push(payload);
       setStatus("Queued — reconnecting…");
-      if (!ws || ws.readyState > 1) connect();
     }
     input.value = "";
   });
