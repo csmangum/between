@@ -6,5 +6,5 @@ python-multipart==0.0.30
 itsdangerous==2.2.0
 markdown==3.8
 bleach==6.2.0
-python-dotenv==1.1.0
+python-dotenv==1.2.2
 httpx==0.28.1
