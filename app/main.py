@@ -16,6 +16,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.types import Scope
@@ -85,13 +86,16 @@ def fmt_dt_soft(value: datetime | None) -> str:
         value = value.replace(tzinfo=timezone.utc)
     local = value.astimezone()
     now = datetime.now(timezone.utc).astimezone()
-    delta = now - local
-    seconds = int(delta.total_seconds())
-    if seconds < 90:
+    seconds = int((now - local).total_seconds())
+    if seconds < 45:
         return "just now"
-    if seconds < 3600:
-        mins = max(1, seconds // 60)
-        return f"{mins}m ago"
+    if seconds < 90:
+        return "a minute ago"
+    if seconds < 45 * 60:
+        mins = max(2, seconds // 60)
+        return f"{mins} minutes ago"
+    if seconds < 90 * 60:
+        return "an hour ago"
     if local.date() == now.date():
         return f"today · {local.strftime('%H:%M')}"
     if local.date() == (now.date() - timedelta(days=1)):
@@ -101,9 +105,16 @@ def fmt_dt_soft(value: datetime | None) -> str:
     return local.strftime("%b %d, %Y")
 
 
+def count_label(n: int, singular: str, plural: str | None = None) -> str:
+    number = int(n or 0)
+    word = singular if number == 1 else (plural or f"{singular}s")
+    return f"{number} {word}"
+
+
 templates.env.filters["md"] = md
 templates.env.filters["when"] = fmt_dt
 templates.env.filters["when_soft"] = fmt_dt_soft
+templates.env.filters["count_label"] = count_label
 templates.env.filters["share_label"] = share.label
 templates.env.globals["app_name"] = APP_NAME
 templates.env.globals["display_for"] = auth.display_for
@@ -134,6 +145,18 @@ class RedirectNeeded(Exception):
 @app.exception_handler(RedirectNeeded)
 async def redirect_needed(_, exc: RedirectNeeded):
     return RedirectResponse(exc.url, status_code=303)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception(request: Request, exc: StarletteHTTPException):
+    if exc.status_code != 404 or request.url.path.startswith("/static"):
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    accept = request.headers.get("accept", "")
+    if "application/json" in accept and "text/html" not in accept:
+        return JSONResponse({"detail": "Not Found"}, status_code=404)
+    if not current_user(request):
+        return RedirectResponse("/login", status_code=303)
+    return render(request, "missing.html", status_code=404)
 
 
 def flash(request: Request, message: str, kind: str = "ok") -> None:
@@ -238,7 +261,13 @@ def login_page(request: Request):
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
     person = auth.verify(username, password)
     if not person:
-        return render(request, "login.html", status_code=401, error="That name or password did not match.")
+        return render(
+            request,
+            "login.html",
+            status_code=401,
+            error="That name or password did not match.",
+            username=username,
+        )
     request.session["user"] = person.username
     return RedirectResponse("/", status_code=303)
 
@@ -284,7 +313,11 @@ def create_topic(
     db: Session = Depends(get_db),
 ):
     user = require_user(request)
-    topic = Topic(title=title.strip(), prompt=prompt.strip(), created_by=user, share_status="private")
+    cleaned = title.strip()
+    if not cleaned:
+        flash(request, "A topic needs a title before it can sit on your desk.", "warn")
+        return RedirectResponse("/", status_code=303)
+    topic = Topic(title=cleaned, prompt=prompt.strip(), created_by=user, share_status="private")
     db.add(topic)
     db.commit()
     store.write_local(topic)
@@ -338,8 +371,11 @@ def add_writing(
 ):
     user = require_user(request)
     topic = db.get(Topic, topic_id)
-    if not topic or not access.topic_open(user, topic) or not body.strip():
+    if not topic or not access.topic_open(user, topic):
         return RedirectResponse(f"/topics/{topic_id}", status_code=303)
+    if not body.strip():
+        flash(request, "A writing needs words before it can stay on the desk.", "warn")
+        return RedirectResponse(f"/topics/{topic_id}#write", status_code=303)
     writing = Writing(
         topic_id=topic.id,
         author=user,
@@ -366,8 +402,11 @@ def add_comment(
 ):
     user = require_user(request)
     topic = db.get(Topic, topic_id)
-    if not topic or not access.topic_open(user, topic) or not body.strip():
+    if not topic or not access.topic_open(user, topic):
         return RedirectResponse(f"/topics/{topic_id}", status_code=303)
+    if not body.strip():
+        flash(request, "A note needs words before it can stay.", "warn")
+        return RedirectResponse(_topic_anchor(topic_id, writing_id, "comments"), status_code=303)
     if writing_id:
         writing = db.get(Writing, writing_id)
         if not writing or writing.topic_id != topic.id or not access.writing_open(user, writing):
@@ -822,7 +861,7 @@ async def topic_chat(websocket: WebSocket, topic_id: int):
                         "author": msg.author,
                         "display": auth.display_for(msg.author),
                         "body": msg.body,
-                        "created_at": fmt_dt(msg.created_at),
+                        "created_at": fmt_dt_soft(msg.created_at),
                     },
                 )
                 await hub.broadcast_presence(topic_id)

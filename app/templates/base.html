@@ -4,45 +4,52 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  {% include "head_links.html" %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
+  <a class="skip" href="#content">Skip to the page</a>
   <div class="wrap">
     <header class="topbar">
       <a class="brand" href="/">
         {{ app_name }}
         <small>a quiet room for two</small>
       </a>
-      <nav class="nav">
+      <nav class="nav" aria-label="Room">
         {% if user %}
-          <a href="/">Desk</a>
+          {% set path = request.url.path %}
+          <a href="/" {% if path == '/' %}aria-current="page"{% endif %}>Desk</a>
           {% if sealed_count %}
             <a class="nav-badge" href="/#incoming">
               Waiting
               <span class="count">{{ sealed_count }}</span>
             </a>
           {% endif %}
-          <a href="/table">Table</a>
-          <a href="/archive">Kept</a>
+          <a href="/table" {% if path == '/table' %}aria-current="page"{% endif %}>Table</a>
+          <a href="/archive" {% if path == '/archive' %}aria-current="page"{% endif %}>Kept</a>
           <span class="who">{{ display }}</span>
           <form method="post" action="/logout"><button class="ghost" type="submit">Leave</button></form>
         {% endif %}
       </nav>
     </header>
     {% if flashes %}
-      <div class="flashes" role="status">
+      <div class="flashes" aria-live="polite">
         {% for flash in flashes %}
-          <div class="flash {{ flash.kind }}">{{ flash.message }}</div>
+          <div class="flash {{ flash.kind }}" role="status">
+            <span>{{ flash.message }}</span>
+            <button class="flash-dismiss" type="button" aria-label="Dismiss">×</button>
+          </div>
         {% endfor %}
       </div>
     {% endif %}
-    <div class="page-enter">
+    <main id="content" class="page-enter">
       {% block body %}{% endblock %}
-    </div>
+    </main>
   </div>
+  <script src="/static/room.js" defer></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

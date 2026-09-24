@@ -38,7 +38,11 @@
               {% if t.share_status == 'private' and t.prompt %}<p class="prompt">{{ t.prompt }}</p>{% endif %}
               <div class="counts">
                 <span class="badge {{ t.share_status }}">{{ t.share_status|share_label }}</span>
-                <span>{{ t.writing_count }} writings</span>
+                {% if t.writing_count %}
+                  <span>{{ t.writing_count|count_label("writing") }}</span>
+                {% else %}
+                  <span>no writings yet</span>
+                {% endif %}
                 <span>{{ t.updated_at|when_soft }}</span>
               </div>
             </a>
@@ -84,9 +88,9 @@
     <p class="panel-note">Starts on your desk alone. Stored under <code>data/local/{{ user }}</code>.</p>
     <form method="post" action="/topics">
       <label for="title">Title</label>
-      <input id="title" name="title" type="text" required placeholder="A place for this thought">
+      <input id="title" name="title" type="text" required placeholder="A place for this thought" data-desk {% if not desk and not table_count and not incoming %}autofocus{% endif %}>
       <label for="prompt">Opening note</label>
-      <textarea id="prompt" name="prompt" placeholder="Only you will see this until the topic is opened together."></textarea>
+      <textarea id="prompt" name="prompt" data-desk placeholder="Only you will see this until the topic is opened together."></textarea>
       <button class="full" type="submit">Keep on my desk</button>
     </form>
   </aside>

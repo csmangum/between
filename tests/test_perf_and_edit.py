@@ -102,6 +102,7 @@ def test_shared_counts_hide_private_drafts(client, db_session: Session):
     assert "draft" not in home.text
     assert "shared-body-unique" in home.text
     assert 'href="/table"' in home.text
+    assert "1 topic" in home.text
 
 
 def test_excerpt_trims_to_words():
