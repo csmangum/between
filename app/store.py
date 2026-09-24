@@ -31,6 +31,28 @@ def _stable_writing_path(folder: Path, writing: Writing) -> Path:
     return folder / f"writing-{writing.id}.md"
 
 
+def revision_path(writing: Writing) -> Path:
+    root = data_root() / "local" / writing.author
+    folder = _topic_dir(root, writing.topic)
+    return folder / f"revision-{writing.id}.md"
+
+
+def write_revision(writing: Writing) -> Path | None:
+    """The unopened revision stays in the author's local folder."""
+    path = revision_path(writing)
+    if not writing.revision_status or not writing.revision_body:
+        path.unlink(missing_ok=True)
+        return None
+    path.write_text(
+        f"# {writing.revision_title or 'Untitled revision'}\n\n"
+        f"_author: {writing.author}_\n"
+        f"_revision: {writing.revision_status}_\n\n"
+        f"{writing.revision_body}\n",
+        encoding="utf-8",
+    )
+    return path
+
+
 def write_local(topic: Topic, writing: Writing | None = None, comment: Comment | None = None) -> Path:
     """Keep the author's copy on disk. The other person never reads this path."""
     if writing is not None:

@@ -56,6 +56,10 @@ def migrate() -> None:
             ("share_status", "VARCHAR(20) DEFAULT 'private'"),
             ("offered_at", "DATETIME"),
             ("accepted_at", "DATETIME"),
+            ("revision_title", "VARCHAR(240)"),
+            ("revision_body", "TEXT"),
+            ("revision_status", "VARCHAR(20)"),
+            ("revision_offered_at", "DATETIME"),
         ],
         "comments": [
             ("share_status", "VARCHAR(20) DEFAULT 'private'"),

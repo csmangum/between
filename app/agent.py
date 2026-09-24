@@ -38,6 +38,8 @@ def archive_excerpt(topic: Topic, user: str) -> str:
             w.body,
             "",
         ]
+        if w.author == user and w.revision_status and w.revision_body:
+            lines += ["Revision still on your desk:", w.revision_body, ""]
         for c in topic.comments:
             if c.writing_id != w.id or not access.comment_open(user, c):
                 continue
