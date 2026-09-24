@@ -13,12 +13,13 @@ def _login(client, username: str, password: str) -> None:
 
 def test_soft_time_uses_the_room_voice():
     now = datetime.now(timezone.utc)
+    yesterday = (now.astimezone() - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
     assert fmt_dt_soft(None) == ""
     assert fmt_dt_soft(now) == "just now"
     assert fmt_dt_soft(now - timedelta(seconds=70)) == "a minute ago"
     assert fmt_dt_soft(now - timedelta(minutes=12)) == "12 minutes ago"
     assert fmt_dt_soft(now - timedelta(minutes=70)) == "an hour ago"
-    assert fmt_dt_soft(now - timedelta(days=1, minutes=5)).startswith("yesterday")
+    assert fmt_dt_soft(yesterday).startswith("yesterday")
     weekday = fmt_dt_soft(now - timedelta(days=3))
     assert "·" in weekday
     assert "ago" not in weekday
@@ -86,7 +87,8 @@ def test_opened_topic_leaves_the_private_desk(client):
     client.post("/logout", follow_redirects=False)
     _login(client, "chris", "pass1")
     home = client.get("/")
-    assert home.text.count(f'href="/topics/{topic_id}"') == 1
+    assert f'href="/topics/{topic_id}"' not in home.text
+    assert 'href="/table"' in home.text
     assert "Between you" in home.text
     assert "On the table" in home.text
 

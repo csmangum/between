@@ -28,6 +28,7 @@
               <span class="count">{{ sealed_count }}</span>
             </a>
           {% endif %}
+          <a href="/table" {% if path == '/table' %}aria-current="page"{% endif %}>Table</a>
           <a href="/archive" {% if path == '/archive' %}aria-current="page"{% endif %}>Kept</a>
           <span class="who">{{ display }}</span>
           <form method="post" action="/logout"><button class="ghost" type="submit">Leave</button></form>

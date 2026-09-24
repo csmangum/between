@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
@@ -7,6 +9,7 @@ from app.main import attach_topic_counts
 from app.markdown_render import render_markdown
 from app.models import Comment, Topic, Writing
 from app.store import data_root
+from app.table import excerpt
 
 
 def _login(client, username: str, password: str) -> None:
@@ -87,15 +90,95 @@ def test_shared_counts_hide_private_drafts(client, db_session: Session):
     db_session.add(topic)
     db_session.flush()
     db_session.add(Writing(topic_id=topic.id, author="chris", title="draft", body="private", share_status="private"))
-    db_session.add(Writing(topic_id=topic.id, author="chris", title="open", body="shared", share_status="shared"))
+    db_session.add(Writing(topic_id=topic.id, author="chris", title="open", body="shared-body-unique", share_status="shared"))
     db_session.commit()
 
     _login(client, "friend", "pass2")
     home = client.get("/")
     assert home.status_code == 200
     assert "Letters" in home.text
-    assert "1 writing" in home.text
+    assert "1 writings" not in home.text
     assert "2 writings" not in home.text
+    assert "draft" not in home.text
+    assert "shared-body-unique" in home.text
+    assert 'href="/table"' in home.text
+    assert "1 topic" in home.text
+
+
+def test_excerpt_trims_to_words():
+    assert excerpt("short") == "short"
+    long = "word " * 80
+    clipped = excerpt(long, limit=20)
+    assert clipped.endswith("…")
+    assert len(clipped) <= 22
+    assert "  " not in clipped
+
+
+def test_table_shows_shared_hides_private_and_sealed_bodies(client, db_session: Session):
+    now = datetime.now(timezone.utc)
+    topic = Topic(
+        title="Letters",
+        prompt="the opening note",
+        created_by="chris",
+        share_status="shared",
+        accepted_at=now,
+    )
+    db_session.add(topic)
+    db_session.flush()
+    db_session.add(
+        Writing(
+            topic_id=topic.id,
+            author="chris",
+            title="Open letter",
+            body="open-body-unique",
+            share_status="shared",
+            accepted_at=now,
+        )
+    )
+    db_session.add(
+        Writing(
+            topic_id=topic.id,
+            author="chris",
+            title="Desk draft",
+            body="secret-draft-unique",
+            share_status="private",
+        )
+    )
+    db_session.add(
+        Writing(
+            topic_id=topic.id,
+            author="chris",
+            title="Sealed title",
+            body="hidden-sealed-body",
+            share_status="offered",
+            offered_at=now,
+        )
+    )
+    db_session.commit()
+
+    _login(client, "chris", "pass1")
+    home = client.get("/")
+    assert home.status_code == 200
+    assert "Your desk is clear" in home.text
+    assert "Letters" in home.text
+
+    chris_table = client.get("/table")
+    assert chris_table.status_code == 200
+    assert "open-body-unique" in chris_table.text
+    assert "the opening note" in chris_table.text
+    assert "secret-draft-unique" not in chris_table.text
+    assert "hidden-sealed-body" not in chris_table.text
+
+    client.post("/logout", follow_redirects=False)
+    _login(client, "friend", "pass2")
+    friend_table = client.get("/table")
+    assert friend_table.status_code == 200
+    assert "open-body-unique" in friend_table.text
+    assert "the opening note" in friend_table.text
+    assert "secret-draft-unique" not in friend_table.text
+    assert "Sealed title" in friend_table.text
+    assert "hidden-sealed-body" not in friend_table.text
+    assert "waiting for you" in friend_table.text
 
 
 def test_comment_requires_matching_topic_writing(client, db_session: Session):

@@ -22,6 +22,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.types import Scope
 
 from . import access, agent, auth, share, store
+from .table import build_table
 from .db import Base, SessionLocal, db_ok, engine, get_db, migrate
 from .hub import hub
 from .markdown_render import render_markdown
@@ -290,14 +291,16 @@ def home(request: Request, db: Session = Depends(get_db)):
     topics = _visible_topics(db, user)
     desk = [t for t in topics if t.created_by == user and t.share_status != "shared"]
     incoming = [t for t in topics if t.created_by != user and t.share_status == "offered"]
-    shared = [t for t in topics if t.share_status == "shared"]
+    view = build_table(_shared_topics(db), user)
     return render(
         request,
         "home.html",
         db=db,
         desk=desk,
         incoming=incoming,
-        shared=shared,
+        table_count=len(view.cards),
+        latest=view.lately[0] if view.lately else None,
+        table_topic=view.cards[0] if view.cards else None,
         sealed_count=len(incoming),
     )
 
@@ -635,6 +638,27 @@ def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_
         store.write_local(comment.topic, comment=comment)
         flash(request, "Comment pulled back.")
     return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
+
+
+def _shared_topics(db: Session) -> list[Topic]:
+    return (
+        db.query(Topic)
+        .options(
+            selectinload(Topic.writings),
+            selectinload(Topic.comments),
+            selectinload(Topic.messages),
+        )
+        .filter(Topic.share_status == "shared")
+        .order_by(Topic.updated_at.desc())
+        .all()
+    )
+
+
+@app.get("/table", response_class=HTMLResponse)
+def table_page(request: Request, db: Session = Depends(get_db)):
+    user = require_user(request)
+    view = build_table(_shared_topics(db), user)
+    return render(request, "table.html", db=db, lately=view.lately, cards=view.cards)
 
 
 def _open_topics(db: Session, user: str) -> list[Topic]:

@@ -55,28 +55,28 @@
 
     <section class="section-block">
       <h2 class="section-label">Between you</h2>
-      {% if shared %}
-        <div class="topic-list">
-          {% for t in shared %}
-            <a class="topic-row shared-row" href="/topics/{{ t.id }}">
-              <h3>{{ t.title }}</h3>
-              <div class="counts">
-                <span class="badge shared">{{ t.share_status|share_label }}</span>
-                {% if t.writing_count %}
-                  <span>{{ t.writing_count|count_label("writing") }}</span>
-                {% else %}
-                  <span>no writings yet</span>
-                {% endif %}
-                {% if t.message_count %}
-                  <span>{{ t.message_count|count_label("line in the margin", "lines in the margin") }}</span>
-                {% else %}
-                  <span>quiet margin</span>
-                {% endif %}
-                {% if t.accepted_at %}<span>opened {{ t.accepted_at|when_soft }}</span>{% endif %}
-              </div>
-            </a>
-          {% endfor %}
-        </div>
+      {% if table_count %}
+        <a class="topic-row shared-row" href="/table">
+          <h3>On the table</h3>
+          {% if latest %}
+            <p class="prompt">{{ latest.excerpt }}</p>
+            <div class="counts">
+              <span>{{ display_for(latest.author) }}</span>
+              <span>{{ latest.at|when_soft }}</span>
+              <span>{{ latest.topic_title }}</span>
+            </div>
+          {% elif table_topic %}
+            {% if table_topic.prompt %}<p class="prompt">{{ table_topic.prompt }}</p>{% endif %}
+            <div class="counts">
+              <span>{{ table_topic.title }}</span>
+              {% if table_topic.accepted_at %}<span>opened {{ table_topic.accepted_at|when_soft }}</span>{% endif %}
+            </div>
+          {% endif %}
+          <div class="counts">
+            <span class="badge shared">kept between you</span>
+            <span>{{ table_count }} {{ "topic" if table_count == 1 else "topics" }}</span>
+          </div>
+        </a>
       {% else %}
         <p class="empty">Nothing sits between you yet. When you are ready, send a topic from your desk — they have to open it before it becomes shared.</p>
       {% endif %}
@@ -88,7 +88,7 @@
     <p class="panel-note">Starts on your desk alone. Stored under <code>data/local/{{ user }}</code>.</p>
     <form method="post" action="/topics">
       <label for="title">Title</label>
-      <input id="title" name="title" type="text" required placeholder="A place for this thought" data-desk {% if not desk and not shared and not incoming %}autofocus{% endif %}>
+      <input id="title" name="title" type="text" required placeholder="A place for this thought" data-desk {% if not desk and not table_count and not incoming %}autofocus{% endif %}>
       <label for="prompt">Opening note</label>
       <textarea id="prompt" name="prompt" data-desk placeholder="Only you will see this until the topic is opened together."></textarea>
       <button class="full" type="submit">Keep on my desk</button>

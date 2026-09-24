@@ -756,6 +756,75 @@ button.full, .btn.full { width: 100%; margin-top: 16px; }
 .shared-row {
   border-color: color-mix(in srgb, var(--accent-2) 28%, var(--line-soft));
 }
+
+.table-moments,
+.table-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.table-moment,
+.table-card,
+.table-highlight {
+  display: block;
+  padding: 16px 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(255, 248, 236, 0.025), transparent 70%), var(--bg-soft);
+  color: inherit;
+}
+.table-moment:hover,
+.table-highlight:hover {
+  border-color: color-mix(in srgb, var(--accent-2) 45%, var(--line));
+  text-decoration: none;
+}
+.table-card {
+  padding: 22px;
+  border-color: color-mix(in srgb, var(--accent-2) 28%, var(--line-soft));
+}
+.table-card h3,
+.table-moment h3,
+.table-highlight h4 {
+  font-family: var(--serif);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+}
+.table-card h3 { font-size: 26px; }
+.table-moment h3,
+.table-highlight h4 { font-size: 20px; }
+.table-moment .kind,
+.table-highlight .kind {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0 0 8px;
+}
+.table-highlight {
+  margin-top: 14px;
+}
+.table-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+.table-waiting-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: 10px;
+  color: inherit;
+  background: rgba(196, 138, 78, 0.04);
+}
+.table-waiting-item:hover {
+  text-decoration: none;
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line));
+}
 .compose-panel {
   position: relative;
   overflow: hidden;
