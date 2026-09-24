@@ -1,0 +1,48 @@
+name: between
+
+services:
+  between:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      APP_NAME: ${APP_NAME:-Between}
+      HTTPS_ONLY: ${HTTPS_ONLY:-true}
+      USER1_NAME: ${USER1_NAME:-chris}
+      USER1_DISPLAY: ${USER1_DISPLAY:-Chris}
+      USER1_PASSWORD: ${USER1_PASSWORD:?USER1_PASSWORD is required}
+      USER2_NAME: ${USER2_NAME:-karin}
+      USER2_DISPLAY: ${USER2_DISPLAY:-Karin}
+      USER2_PASSWORD: ${USER2_PASSWORD:?USER2_PASSWORD is required}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      AGENT_API_KEY: ${AGENT_API_KEY:-}
+      AGENT_BASE_URL: ${AGENT_BASE_URL:-https://api.x.ai/v1}
+      AGENT_MODEL: ${AGENT_MODEL:-grok-4}
+      DATABASE_URL: sqlite:////data/between.db
+    volumes:
+      - between-data:/data
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - between
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS is required}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  between-data:
+  caddy-data:
+  caddy-config:

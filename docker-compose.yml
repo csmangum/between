@@ -16,6 +16,7 @@ services:
       AGENT_API_KEY: ${AGENT_API_KEY:-}
       AGENT_BASE_URL: ${AGENT_BASE_URL:-https://api.x.ai/v1}
       AGENT_MODEL: ${AGENT_MODEL:-grok-4}
+      HTTPS_ONLY: ${HTTPS_ONLY:-}
       DATABASE_URL: sqlite:////data/between.db
     volumes:
       - ./data:/data
