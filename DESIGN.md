@@ -259,13 +259,19 @@ This stack is a choice: one process a person can read, run, and back up. It is n
 
 ## 12. Security notes
 
-In scope for v1:
+In scope for v1 (the review that produced this list is [SECURITY.md](SECURITY.md)):
 
 - No public registration
 - Bodies withheld from the counterpart’s HTTP responses until `shared`
+- Objects the counterpart may not know about behave exactly like missing ids — no redirect, count, or error reveals them
 - Export filtered the same way as the archive
-- Markdown sanitized on render (bleach)
-- Session secret required in production
+- Markdown sanitized on render (bleach, explicit allow-lists, no images, external links `noopener noreferrer`)
+- Session secret and real passwords required before the process will serve; hashed passwords supported
+- Login throttled per address and per name
+- Every state-changing request and the chat socket must originate from this site (`Origin` check + `SameSite=Strict`)
+- Strict Content Security Policy, no inline script, no third-party requests to render a page
+- `data/` and the database are owner-only on disk; pulling back removes the page from `data/shared/`
+- Container runs unprivileged, loopback-bound, behind the operator’s TLS proxy
 
 Out of scope for v1, and therefore not promised:
 
@@ -306,6 +312,10 @@ Status returns to private. B loses the body on the next load. B may still have a
 | Concern | Where |
 |---|---|
 | People | `app/auth.py` |
+| Settings that must be safe before serving | `app/config.py` |
+| Password hashing helper | `app/passwords.py` |
+| Login throttle | `app/throttle.py` |
+| Origin check, security headers, body cap | `app/security.py` |
 | Predicates visible / open | `app/access.py` |
 | Share status + UI labels | `app/share.py` |
 | Tables | `app/models.py` |
