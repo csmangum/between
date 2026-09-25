@@ -1,13 +1,17 @@
 (() => {
-  const config = window.BetweenChat;
-  if (!config) return;
-
   const log = document.getElementById("chat-log");
   const form = document.getElementById("chat-form");
   const input = document.getElementById("chat-body");
   const presence = document.getElementById("presence");
   const limit = document.getElementById("chat-limit");
   if (!log || !form || !input || !presence) return;
+
+  const config = {
+    topicId: form.dataset.topicId,
+    me: form.dataset.me,
+    display: form.dataset.display,
+  };
+  if (!config.topicId || !config.me) return;
 
   const maxLength = 4000;
   const proto = location.protocol === "https:" ? "wss" : "ws";
@@ -99,7 +103,7 @@
     }
     closedOnPurpose = false;
     setStatus(reconnectAttempt ? "Finding the margin again…" : "Opening the margin…");
-    ws = new WebSocket(`${proto}://${location.host}/ws/topics/${config.topicId}`);
+    ws = new WebSocket(`${proto}://${location.host}/ws/topics/${encodeURIComponent(config.topicId)}`);
 
     ws.addEventListener("open", () => {
       reconnectAttempt = 0;

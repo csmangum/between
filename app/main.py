@@ -8,7 +8,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Form, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -19,21 +18,29 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import Scope
 
 from . import access, agent, auth, share, store
-from .table import build_table
-from .db import Base, SessionLocal, db_ok, engine, get_db, migrate
+from .config import load_settings
+from .db import Base, SessionLocal, db_ok, engine, get_db, migrate, secure_database_files
 from .hub import hub
 from .markdown_render import render_markdown
 from .models import ChatMessage, Comment, Topic, Writing, utcnow
+from .security import BodySizeLimitMiddleware, OriginCheckMiddleware, SecurityHeadersMiddleware
 from .share import ShareStatus
+from .table import build_table
+from .throttle import LoginThrottle
 
-load_dotenv()
+settings = load_settings()
+APP_NAME = settings.app_name
+CHAT_MAX_CHARS = 4000
 
-APP_NAME = os.getenv("APP_NAME", "Between")
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-only-change-me")
-HTTPS_ONLY = os.getenv("HTTPS_ONLY", "").lower() in {"1", "true", "yes"}
+login_throttle = LoginThrottle(
+    ip_limit=settings.login_ip_limit,
+    user_limit=settings.login_user_limit,
+    window_seconds=settings.login_window_seconds,
+)
 
 
 @asynccontextmanager
@@ -42,14 +49,22 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title=APP_NAME, lifespan=lifespan)
+app = FastAPI(title=APP_NAME, lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+# Middleware is applied outermost-last: size limit and host checks run before anything
+# else touches the request; the session is decoded only for requests that pass them.
 app.add_middleware(GZipMiddleware, minimum_size=400)
 app.add_middleware(
     SessionMiddleware,
-    secret_key=SECRET_KEY,
-    same_site="lax",
-    https_only=HTTPS_ONLY,
+    secret_key=settings.secret_key,
+    same_site="strict",
+    https_only=settings.https_only,
+    max_age=settings.session_max_age,
 )
+app.add_middleware(OriginCheckMiddleware)
+app.add_middleware(SecurityHeadersMiddleware, https_only=settings.https_only)
+if settings.allowed_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts)
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_bytes)
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -121,8 +136,12 @@ templates.env.globals["display_for"] = auth.display_for
 
 
 def init_db() -> None:
+    # Everything this process writes (SQLite, WAL, markdown mirrors) is private to its owner.
+    os.umask(0o077)
     Base.metadata.create_all(bind=engine)
     migrate()
+    secure_database_files()
+    store.secure_data_root()
     auth.load_people()
 
 
@@ -242,6 +261,21 @@ def _apply_status(obj, status: ShareStatus) -> None:
     share.set_status(obj, status)
 
 
+def _visible_writing(db: Session, user: str, writing_id: int) -> Writing | None:
+    """A writing this person may know exists. Anything else looks like a missing id."""
+    writing = db.get(Writing, writing_id)
+    if writing is None or not access.writing_visible(user, writing):
+        return None
+    return writing
+
+
+def _visible_comment(db: Session, user: str, comment_id: int) -> Comment | None:
+    comment = db.get(Comment, comment_id)
+    if comment is None or not access.comment_visible(user, comment):
+        return None
+    return comment
+
+
 def _topic_anchor(topic_id: int, writing_id: int | None = None, fragment: str | None = None) -> str:
     if writing_id:
         return f"/topics/{topic_id}#writing-{writing_id}"
@@ -257,10 +291,25 @@ def login_page(request: Request):
     return render(request, "login.html")
 
 
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
 @app.post("/login")
 def login(request: Request, username: str = Form(...), password: str = Form(...)):
+    ip = _client_ip(request)
+    name = username.strip().lower()
+    if login_throttle.blocked(ip, name):
+        return render(
+            request,
+            "login.html",
+            status_code=429,
+            error="Too many attempts. The door stays closed for a little while.",
+            username=username,
+        )
     person = auth.verify(username, password)
     if not person:
+        login_throttle.record_failure(ip, name)
         return render(
             request,
             "login.html",
@@ -268,6 +317,8 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
             error="That name or password did not match.",
             username=username,
         )
+    login_throttle.record_success(ip, name)
+    request.session.clear()
     request.session["user"] = person.username
     return RedirectResponse("/", status_code=303)
 
@@ -411,6 +462,15 @@ def add_comment(
         writing = db.get(Writing, writing_id)
         if not writing or writing.topic_id != topic.id or not access.writing_open(user, writing):
             return RedirectResponse(f"/topics/{topic_id}", status_code=303)
+    if parent_id:
+        parent = db.get(Comment, parent_id)
+        if (
+            not parent
+            or parent.topic_id != topic.id
+            or parent.writing_id != (writing_id or None)
+            or not access.comment_open(user, parent)
+        ):
+            return RedirectResponse(f"/topics/{topic_id}", status_code=303)
     comment = Comment(
         topic_id=topic.id,
         writing_id=writing_id or None,
@@ -477,6 +537,7 @@ def revoke_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
         topic.updated_at = utcnow()
         db.commit()
         store.write_local(topic)
+        store.remove_shared(topic)
         flash(request, "Pulled back. Quiet on your desk again.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
@@ -484,7 +545,7 @@ def revoke_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
 @app.post("/writings/{writing_id}/offer")
 def offer_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    writing = db.get(Writing, writing_id)
+    writing = _visible_writing(db, user, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
     other = auth.display_for(access.other_username(user) or "")
@@ -503,7 +564,7 @@ def offer_writing(request: Request, writing_id: int, db: Session = Depends(get_d
 @app.post("/writings/{writing_id}/accept")
 def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    writing = db.get(Writing, writing_id)
+    writing = _visible_writing(db, user, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
     if writing.author != user and writing.share_status == "offered":
@@ -520,7 +581,7 @@ def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_
 @app.post("/writings/{writing_id}/decline")
 def decline_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    writing = db.get(Writing, writing_id)
+    writing = _visible_writing(db, user, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
     if writing.author != user and writing.share_status == "offered":
@@ -537,7 +598,7 @@ def decline_writing(request: Request, writing_id: int, db: Session = Depends(get
 @app.post("/writings/{writing_id}/revoke")
 def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    writing = db.get(Writing, writing_id)
+    writing = _visible_writing(db, user, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
     if writing.author == user and writing.share_status in {"offered", "shared"}:
@@ -547,6 +608,7 @@ def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_
         db.commit()
         store.write_local(writing.topic, writing)
         store.write_revision(writing)
+        store.remove_shared(writing.topic, writing)
         flash(request, "Pulled back to your desk.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
 
@@ -615,7 +677,7 @@ def save_writing_revision(
 @app.post("/writings/{writing_id}/revision/offer")
 def offer_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    writing = db.get(Writing, writing_id)
+    writing = _visible_writing(db, user, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
     anchor = f"/topics/{writing.topic_id}#writing-{writing_id}"
@@ -637,7 +699,7 @@ def offer_writing_revision(request: Request, writing_id: int, db: Session = Depe
 @app.post("/writings/{writing_id}/revision/accept")
 def accept_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    writing = db.get(Writing, writing_id)
+    writing = _visible_writing(db, user, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
     anchor = f"/topics/{writing.topic_id}#writing-{writing_id}"
@@ -660,7 +722,7 @@ def accept_writing_revision(request: Request, writing_id: int, db: Session = Dep
 @app.post("/writings/{writing_id}/revision/decline")
 def decline_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    writing = db.get(Writing, writing_id)
+    writing = _visible_writing(db, user, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
     anchor = f"/topics/{writing.topic_id}#writing-{writing_id}"
@@ -676,7 +738,7 @@ def decline_writing_revision(request: Request, writing_id: int, db: Session = De
 @app.post("/writings/{writing_id}/revision/revoke")
 def revoke_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    writing = db.get(Writing, writing_id)
+    writing = _visible_writing(db, user, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
     anchor = f"/topics/{writing.topic_id}#writing-{writing_id}"
@@ -692,7 +754,7 @@ def revoke_writing_revision(request: Request, writing_id: int, db: Session = Dep
 @app.post("/writings/{writing_id}/revision/discard")
 def discard_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    writing = db.get(Writing, writing_id)
+    writing = _visible_writing(db, user, writing_id)
     if not writing:
         return RedirectResponse("/", status_code=303)
     anchor = f"/topics/{writing.topic_id}#writing-{writing_id}"
@@ -708,7 +770,7 @@ def discard_writing_revision(request: Request, writing_id: int, db: Session = De
 @app.post("/comments/{comment_id}/offer")
 def offer_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    comment = db.get(Comment, comment_id)
+    comment = _visible_comment(db, user, comment_id)
     if not comment:
         return RedirectResponse("/", status_code=303)
     if comment.author == user and comment.share_status == "private" and comment.topic.share_status == "shared":
@@ -722,7 +784,7 @@ def offer_comment(request: Request, comment_id: int, db: Session = Depends(get_d
 @app.post("/comments/{comment_id}/accept")
 def accept_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    comment = db.get(Comment, comment_id)
+    comment = _visible_comment(db, user, comment_id)
     if not comment:
         return RedirectResponse("/", status_code=303)
     if comment.author != user and comment.share_status == "offered":
@@ -739,7 +801,7 @@ def accept_comment(request: Request, comment_id: int, db: Session = Depends(get_
 @app.post("/comments/{comment_id}/decline")
 def decline_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    comment = db.get(Comment, comment_id)
+    comment = _visible_comment(db, user, comment_id)
     if not comment:
         return RedirectResponse("/", status_code=303)
     if comment.author != user and comment.share_status == "offered":
@@ -756,7 +818,7 @@ def decline_comment(request: Request, comment_id: int, db: Session = Depends(get
 @app.post("/comments/{comment_id}/revoke")
 def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
-    comment = db.get(Comment, comment_id)
+    comment = _visible_comment(db, user, comment_id)
     if not comment:
         return RedirectResponse("/", status_code=303)
     if comment.author == user and comment.share_status in {"offered", "shared"}:
@@ -764,6 +826,7 @@ def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_
         comment.topic.updated_at = utcnow()
         db.commit()
         store.write_local(comment.topic, comment=comment)
+        store.remove_shared(comment.topic, comment=comment)
         flash(request, "Comment pulled back.")
     return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
 
@@ -953,50 +1016,60 @@ async def topic_chat(websocket: WebSocket, topic_id: int):
         await websocket.close(code=4401)
         return
     db = SessionLocal()
+    joined = False
     try:
         topic = db.get(Topic, topic_id)
         if not topic or topic.share_status != "shared":
             await websocket.close(code=4404)
             return
         await hub.join(topic_id, websocket, user)
-        try:
-            while True:
+        joined = True
+        while True:
+            try:
                 data = await websocket.receive_json()
-                db.expire_all()
-                topic = db.get(Topic, topic_id)
-                if not topic or not access.topic_open(user, topic) or topic.share_status != "shared":
-                    await websocket.close(code=4404)
-                    break
-                kind = data.get("type") or ("chat" if data.get("body") else "")
-                if kind == "typing":
-                    hub.set_typing(topic_id, websocket, bool(data.get("on")))
-                    await hub.broadcast_presence(topic_id)
-                    continue
-                body = str(data.get("body", "")).strip()
-                if kind != "chat" or not body:
-                    continue
-                hub.set_typing(topic_id, websocket, False)
-                msg = ChatMessage(topic_id=topic_id, author=user, body=body[:4000])
-                topic.updated_at = utcnow()
-                db.add(msg)
-                db.commit()
-                db.refresh(msg)
-                await hub.broadcast(
-                    topic_id,
-                    {
-                        "type": "chat",
-                        "id": msg.id,
-                        "author": msg.author,
-                        "display": auth.display_for(msg.author),
-                        "body": msg.body,
-                        "created_at": fmt_dt_soft(msg.created_at),
-                    },
-                )
+            except (ValueError, KeyError):
+                # Malformed JSON or a binary frame: ignore the message, keep the seat.
+                continue
+            if not isinstance(data, dict):
+                continue
+            db.expire_all()
+            topic = db.get(Topic, topic_id)
+            if not topic or not access.topic_open(user, topic) or topic.share_status != "shared":
+                await websocket.close(code=4404)
+                break
+            kind = data.get("type") or ("chat" if data.get("body") else "")
+            if kind == "typing":
+                hub.set_typing(topic_id, websocket, bool(data.get("on")))
                 await hub.broadcast_presence(topic_id)
-        except WebSocketDisconnect:
+                continue
+            raw_body = data.get("body", "")
+            body = raw_body.strip() if isinstance(raw_body, str) else ""
+            if kind != "chat" or not body:
+                continue
+            hub.set_typing(topic_id, websocket, False)
+            msg = ChatMessage(topic_id=topic_id, author=user, body=body[:CHAT_MAX_CHARS])
+            topic.updated_at = utcnow()
+            db.add(msg)
+            db.commit()
+            db.refresh(msg)
+            await hub.broadcast(
+                topic_id,
+                {
+                    "type": "chat",
+                    "id": msg.id,
+                    "author": msg.author,
+                    "display": auth.display_for(msg.author),
+                    "body": msg.body,
+                    "created_at": fmt_dt_soft(msg.created_at),
+                },
+            )
+            await hub.broadcast_presence(topic_id)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if joined:
             hub.leave(topic_id, websocket)
             await hub.broadcast_presence(topic_id)
-    finally:
         db.close()
 
 

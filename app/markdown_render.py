@@ -33,16 +33,18 @@ ALLOWED_TAGS = bleach.sanitizer.ALLOWED_TAGS.union(
         "td",
     }
 )
+# Authors may not set rel/target themselves; external links always get ours below.
 ALLOWED_ATTRS = {
     **bleach.sanitizer.ALLOWED_ATTRIBUTES,
-    "a": ["href", "title", "rel", "target"],
+    "a": ["href", "title"],
 }
+ALLOWED_PROTOCOLS = ["http", "https", "mailto"]
 
 _ANCHOR = re.compile(r"<a\s+([^>]+)>", re.IGNORECASE)
 
 
 def _annotate_links(html: str) -> str:
-    """External links leave the room in a new tab and do not leak the opener."""
+    """External links leave the room in a new tab and do not leak the opener or referrer."""
 
     def repl(match: re.Match[str]) -> str:
         attrs = match.group(1)
@@ -52,11 +54,7 @@ def _annotate_links(html: str) -> str:
         href = href_match.group(1)
         if not href.startswith(("http://", "https://", "//")):
             return match.group(0)
-        if "rel=" not in attrs:
-            attrs += ' rel="noopener noreferrer"'
-        if "target=" not in attrs:
-            attrs += ' target="_blank"'
-        return f"<a {attrs}>"
+        return f'<a {attrs} rel="noopener noreferrer" target="_blank">'
 
     return _ANCHOR.sub(repl, html)
 
@@ -67,7 +65,7 @@ def _render_cached(digest: str, text: str) -> str:
         text,
         extensions=["fenced_code", "tables", "nl2br", "sane_lists"],
     )
-    cleaned = bleach.clean(raw, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS)
+    cleaned = bleach.clean(raw, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS, protocols=ALLOWED_PROTOCOLS)
     return _annotate_links(cleaned)
 
 

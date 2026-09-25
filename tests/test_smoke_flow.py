@@ -5,8 +5,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from starlette.websockets import WebSocketDisconnect
 
-from app.main import app
 from app.models import ChatMessage, Topic
+
+from .conftest import CHRIS_PASSWORD, FRIEND_PASSWORD, make_client
 
 
 def _login(client: TestClient, username: str, password: str) -> None:
@@ -15,7 +16,7 @@ def _login(client: TestClient, username: str, password: str) -> None:
 
 
 def test_offer_accept_flow(client: TestClient):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     created = client.post("/topics", data={"title": "Letters", "prompt": "private note"}, follow_redirects=False)
     assert created.status_code == 303
     topic_url = created.headers["location"]
@@ -25,7 +26,7 @@ def test_offer_accept_flow(client: TestClient):
     assert offered.status_code == 303
 
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
 
     home = client.get("/")
     assert home.status_code == 200
@@ -48,13 +49,13 @@ def test_offer_accept_flow(client: TestClient):
 
 
 def test_websocket_stops_after_topic_revoke(db_session: Session):
-    with TestClient(app) as author, TestClient(app) as reader:
-        _login(author, "chris", "pass1")
+    with make_client() as author, make_client() as reader:
+        _login(author, "chris", CHRIS_PASSWORD)
         created = author.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
         topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
         author.post(f"/topics/{topic_id}/offer", follow_redirects=False)
 
-        _login(reader, "friend", "pass2")
+        _login(reader, "friend", FRIEND_PASSWORD)
         reader.post(f"/topics/{topic_id}/accept", follow_redirects=False)
 
         with reader.websocket_connect(f"/ws/topics/{topic_id}") as ws:
@@ -71,19 +72,19 @@ def test_websocket_stops_after_topic_revoke(db_session: Session):
 
 
 def test_draft_route_closes_after_topic_revoke(client: TestClient):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     created = client.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
     topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
     client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     client.post(f"/topics/{topic_id}/revoke", follow_redirects=False)
 
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     response = client.post(f"/topics/{topic_id}/draft", follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == "/"

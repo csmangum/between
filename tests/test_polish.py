@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 from app.main import count_label, fmt_dt_soft
 from app.markdown_render import render_markdown
 
+from .conftest import CHRIS_PASSWORD, FRIEND_PASSWORD
+
 
 def _login(client, username: str, password: str) -> None:
     response = client.post("/login", data={"username": username, "password": password}, follow_redirects=False)
@@ -50,7 +52,7 @@ def test_failed_login_keeps_the_name(client):
 
 
 def test_blank_topic_title_does_not_land_on_the_desk(client):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     response = client.post("/topics", data={"title": "   ", "prompt": "still private"}, follow_redirects=False)
     assert response.status_code == 303
     assert response.headers["location"] == "/"
@@ -61,7 +63,7 @@ def test_blank_topic_title_does_not_land_on_the_desk(client):
 
 
 def test_empty_writing_warns_instead_of_saving(client):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     created = client.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
     topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
     response = client.post(
@@ -77,15 +79,15 @@ def test_empty_writing_warns_instead_of_saving(client):
 
 
 def test_opened_topic_leaves_the_private_desk(client):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     created = client.post("/topics", data={"title": "On the table", "prompt": ""}, follow_redirects=False)
     topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
     client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     home = client.get("/")
     assert f'href="/topics/{topic_id}"' not in home.text
     assert 'href="/table"' in home.text
@@ -94,7 +96,7 @@ def test_opened_topic_leaves_the_private_desk(client):
 
 
 def test_missing_page_for_someone_in_the_room(client):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     page = client.get("/not-a-page")
     assert page.status_code == 404
     assert "This is not on the desk" in page.text

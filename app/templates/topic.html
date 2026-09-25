@@ -186,7 +186,7 @@
         <form method="post" action="/topics/{{ topic.id }}/draft" class="agent-draft">
           <button class="ghost" type="submit">Draft a reply from what you can already read</button>
         </form>
-        <p class="panel-note">The draft stays on your desk. The agent never sees their private pages.</p>
+        <p class="panel-note">The draft stays on your desk. The agent never sees their private pages — but everything you can read here, including what {{ other }} has opened to you, is sent to the configured model endpoint.</p>
       {% else %}
         <p class="panel-note">To draft a reply with an agent, set <code>XAI_API_KEY</code> or <code>AGENT_API_KEY</code> in <code>.env</code>.</p>
       {% endif %}
@@ -256,7 +256,7 @@
           <p id="chat-empty" class="chat-empty">Nothing in the margin yet. A few words are enough.</p>
         {% endfor %}
       </div>
-      <form id="chat-form" class="chat-compose">
+      <form id="chat-form" class="chat-compose" data-topic-id="{{ topic.id }}" data-me="{{ user }}" data-display="{{ display }}">
         <label for="chat-body">Message in the live margin</label>
         <textarea class="chat-input" id="chat-body" placeholder="A few words in the margin." enterkeyhint="send" required></textarea>
         <p id="chat-limit" class="chat-hint" hidden></p>
@@ -272,13 +272,6 @@
 
 {% block scripts %}
 {% if topic_shared %}
-<script>
-  window.BetweenChat = {
-    topicId: {{ topic.id }},
-    me: {{ user|tojson }},
-    display: {{ display|tojson }},
-  };
-</script>
 <script src="/static/chat.js" defer></script>
 {% endif %}
 {% endblock %}

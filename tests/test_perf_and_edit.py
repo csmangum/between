@@ -11,6 +11,8 @@ from app.models import Comment, Topic, Writing
 from app.store import data_root
 from app.table import excerpt
 
+from .conftest import CHRIS_PASSWORD, FRIEND_PASSWORD
+
 
 def _login(client, username: str, password: str) -> None:
     response = client.post("/login", data={"username": username, "password": password}, follow_redirects=False)
@@ -34,7 +36,7 @@ def test_markdown_blocks_remote_images():
 
 
 def test_edit_private_writing_keeps_single_local_file(client, db_session: Session):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     created = client.post("/topics", data={"title": "Edit me", "prompt": ""}, follow_redirects=False)
     topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
     client.post(f"/topics/{topic_id}/writings", data={"title": "Draft", "body": "v1"}, follow_redirects=False)
@@ -59,7 +61,7 @@ def test_edit_private_writing_keeps_single_local_file(client, db_session: Sessio
 
 
 def test_home_avoids_n_plus_one(client, db_session: Session):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     for i in range(12):
         topic = Topic(title=f"T{i}", prompt="", created_by="chris", share_status="private")
         db_session.add(topic)
@@ -93,7 +95,7 @@ def test_shared_counts_hide_private_drafts(client, db_session: Session):
     db_session.add(Writing(topic_id=topic.id, author="chris", title="open", body="shared-body-unique", share_status="shared"))
     db_session.commit()
 
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     home = client.get("/")
     assert home.status_code == 200
     assert "Letters" in home.text
@@ -156,7 +158,7 @@ def test_table_shows_shared_hides_private_and_sealed_bodies(client, db_session: 
     )
     db_session.commit()
 
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     home = client.get("/")
     assert home.status_code == 200
     assert "Your desk is clear" in home.text
@@ -170,7 +172,7 @@ def test_table_shows_shared_hides_private_and_sealed_bodies(client, db_session: 
     assert "hidden-sealed-body" not in chris_table.text
 
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     friend_table = client.get("/table")
     assert friend_table.status_code == 200
     assert "open-body-unique" in friend_table.text
@@ -182,7 +184,7 @@ def test_table_shows_shared_hides_private_and_sealed_bodies(client, db_session: 
 
 
 def test_comment_requires_matching_topic_writing(client, db_session: Session):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     first = client.post("/topics", data={"title": "One", "prompt": ""}, follow_redirects=False)
     second = client.post("/topics", data={"title": "Two", "prompt": ""}, follow_redirects=False)
     first_id = int(first.headers["location"].rsplit("/", 1)[-1])
@@ -201,15 +203,15 @@ def test_comment_requires_matching_topic_writing(client, db_session: Session):
 
 
 def test_private_comment_mirror_recreated_on_decline_and_revoke(client, db_session: Session):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     created = client.post("/topics", data={"title": "Comments", "prompt": ""}, follow_redirects=False)
     topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
     client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     client.post(f"/topics/{topic_id}/comments", data={"body": "quiet note"}, follow_redirects=False)
 
     comment = db_session.query(Comment).one()
@@ -221,13 +223,13 @@ def test_private_comment_mirror_recreated_on_decline_and_revoke(client, db_sessi
     client.post(f"/comments/{comment.id}/offer", follow_redirects=False)
     local_path.unlink()
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     client.post(f"/comments/{comment.id}/decline", follow_redirects=False)
     assert local_path.exists()
     assert "_status: private_" in local_path.read_text(encoding="utf-8")
 
     client.post("/logout", follow_redirects=False)
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     client.post(f"/comments/{comment.id}/offer", follow_redirects=False)
     local_path.unlink()
     client.post(f"/comments/{comment.id}/revoke", follow_redirects=False)
@@ -236,7 +238,7 @@ def test_private_comment_mirror_recreated_on_decline_and_revoke(client, db_sessi
 
 
 def test_invalid_writing_ids_redirect_home(client):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     for path in ("offer", "accept", "decline", "revoke"):
         response = client.post(f"/writings/9999/{path}", follow_redirects=False)
         assert response.status_code == 303
@@ -244,22 +246,22 @@ def test_invalid_writing_ids_redirect_home(client):
 
 
 def test_accept_writing_requires_shared_topic(client, db_session: Session):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     created = client.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
     topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
     client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     client.post(f"/topics/{topic_id}/writings", data={"title": "Draft", "body": "v1"}, follow_redirects=False)
     writing = db_session.query(Writing).one()
     client.post(f"/writings/{writing.id}/offer", follow_redirects=False)
     client.post(f"/topics/{topic_id}/revoke", follow_redirects=False)
 
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     response = client.post(f"/writings/{writing.id}/accept", follow_redirects=False)
     assert response.status_code == 303
     db_session.expire_all()
@@ -268,22 +270,22 @@ def test_accept_writing_requires_shared_topic(client, db_session: Session):
 
 
 def test_decline_writing_requires_shared_topic(client, db_session: Session):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     created = client.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
     topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
     client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     client.post(f"/topics/{topic_id}/writings", data={"title": "Draft", "body": "v1"}, follow_redirects=False)
     writing = db_session.query(Writing).one()
     client.post(f"/writings/{writing.id}/offer", follow_redirects=False)
     client.post(f"/topics/{topic_id}/revoke", follow_redirects=False)
 
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     response = client.post(f"/writings/{writing.id}/decline", follow_redirects=False)
     assert response.status_code == 303
     db_session.expire_all()
@@ -292,22 +294,22 @@ def test_decline_writing_requires_shared_topic(client, db_session: Session):
 
 
 def test_comment_actions_require_shared_topic(client, db_session: Session):
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     created = client.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
     topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
     client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     client.post(f"/topics/{topic_id}/comments", data={"body": "quiet note"}, follow_redirects=False)
     comment = db_session.query(Comment).one()
     client.post(f"/comments/{comment.id}/offer", follow_redirects=False)
     client.post(f"/topics/{topic_id}/revoke", follow_redirects=False)
 
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     accept = client.post(f"/comments/{comment.id}/accept", follow_redirects=False)
     decline = client.post(f"/comments/{comment.id}/decline", follow_redirects=False)
     assert accept.status_code == 303

@@ -96,6 +96,25 @@ def migrate() -> None:
                 conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({column})"))
 
 
+def sqlite_path() -> Path | None:
+    if not DATABASE_URL.startswith("sqlite:///"):
+        return None
+    return Path(DATABASE_URL.replace("sqlite:///", "", 1))
+
+
+def secure_database_files() -> None:
+    """Owner-only permissions on the database and its WAL/shm companions."""
+    path = sqlite_path()
+    if path is None:
+        return
+    for candidate in (path, path.with_name(path.name + "-wal"), path.with_name(path.name + "-shm")):
+        try:
+            if candidate.exists():
+                candidate.chmod(0o600)
+        except OSError:
+            pass
+
+
 def get_db():
     db = SessionLocal()
     try:

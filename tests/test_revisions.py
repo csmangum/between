@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.models import Writing
 from app.store import data_root
 
+from .conftest import CHRIS_PASSWORD, FRIEND_PASSWORD
+
 
 def _login(client: TestClient, username: str, password: str) -> None:
     response = client.post("/login", data={"username": username, "password": password}, follow_redirects=False)
@@ -13,7 +15,7 @@ def _login(client: TestClient, username: str, password: str) -> None:
 
 
 def _shared_writing(client: TestClient, db_session: Session) -> tuple[int, int]:
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     created = client.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
     topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
     client.post(
@@ -24,16 +26,16 @@ def _shared_writing(client: TestClient, db_session: Session) -> tuple[int, int]:
     writing_id = db_session.query(Writing).filter(Writing.topic_id == topic_id).one().id
     client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     client.post(f"/topics/{topic_id}/accept", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     client.post(f"/writings/{writing_id}/offer", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     client.post(f"/writings/{writing_id}/accept", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     return topic_id, writing_id
 
 
@@ -51,7 +53,7 @@ def test_revision_stays_sealed_until_opened(client: TestClient, db_session: Sess
 
     client.post(f"/writings/{writing_id}/revision/offer", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     sealed = client.get(f"/topics/{topic_id}")
     assert "the opened page" in sealed.text
     assert "a later page" not in sealed.text
@@ -81,7 +83,7 @@ def test_declined_revision_returns_to_the_desk(client: TestClient, db_session: S
     )
     client.post(f"/writings/{writing_id}/revision/offer", follow_redirects=False)
     client.post("/logout", follow_redirects=False)
-    _login(client, "friend", "pass2")
+    _login(client, "friend", FRIEND_PASSWORD)
     client.post(f"/writings/{writing_id}/revision/decline", follow_redirects=False)
     still = client.get(f"/topics/{topic_id}")
     assert "the opened page" in still.text
@@ -89,7 +91,7 @@ def test_declined_revision_returns_to_the_desk(client: TestClient, db_session: S
     assert "Open the revision" not in still.text
 
     client.post("/logout", follow_redirects=False)
-    _login(client, "chris", "pass1")
+    _login(client, "chris", CHRIS_PASSWORD)
     desk = client.get(f"/topics/{topic_id}")
     assert "a later page" in desk.text
     assert "Send this revision" in desk.text
