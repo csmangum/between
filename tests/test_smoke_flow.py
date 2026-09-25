@@ -93,3 +93,28 @@ def test_health(client: TestClient):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["ok"] is True
+
+
+def test_delete_topic_removes_private_topic(client: TestClient, db_session: Session):
+    _login(client, "chris", "pass1")
+    created = client.post("/topics", data={"title": "Delete me", "prompt": "quiet"}, follow_redirects=False)
+    topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
+
+    deleted = client.post(f"/topics/{topic_id}/delete", follow_redirects=False)
+    assert deleted.status_code == 303
+    assert deleted.headers["location"] == "/"
+    assert db_session.get(Topic, topic_id) is None
+
+
+def test_delete_topic_ignores_non_private_topics(client: TestClient, db_session: Session):
+    _login(client, "chris", "pass1")
+    created = client.post("/topics", data={"title": "No delete", "prompt": "quiet"}, follow_redirects=False)
+    topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
+
+    response = client.post(f"/topics/{topic_id}/delete", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == f"/topics/{topic_id}"
+    topic = db_session.get(Topic, topic_id)
+    assert topic is not None
+    assert topic.share_status == "offered"

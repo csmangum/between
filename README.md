@@ -33,7 +33,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Put Caddy or nginx in front with HTTPS if it will sit on the public internet.
+To put it on a small Google Cloud VM with HTTPS, follow [deploy/gcp/RUNBOOK.md](deploy/gcp/RUNBOOK.md).
 
 ## Accounts
 
