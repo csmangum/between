@@ -15,6 +15,7 @@ import socket
 import ssl
 import struct
 import sys
+import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -172,82 +173,97 @@ def main() -> None:
     karin_name = env.get("USER2_NAME", "karin")
     chris_password = env["USER1_PASSWORD"]
     karin_password = env["USER2_PASSWORD"]
-    secret = "deploy-check-body-only-chris-should-see-this-before-open"
-    title = "Deploy check"
-
-    health_op, _ = opener()
-    health = request(health_op, "GET", f"{base}/health")
-    body = health.read().decode()
-    check(health.status == 200 and '"ok":true' in body.replace(" ", ""), "/health")
-
-    chris, chris_jar = opener()
-    bad = request(chris, "POST", f"{base}/login", {"username": chris_name, "password": "nope"})
-    check(bad.status == 401, "wrong password is rejected")
-
-    chris, chris_jar = opener()
-    logged_in = request(chris, "POST", f"{base}/login", {"username": chris_name, "password": chris_password})
-    check(logged_in.status == 303, f"login {chris_name}")
-    created = request(chris, "POST", f"{base}/topics", {"title": title, "prompt": secret})
-    location = created.headers.get("Location", "")
-    topic_id = location.rstrip("/").rsplit("/", 1)[-1]
-    check(created.status == 303 and topic_id.isdigit(), "topic kept on the desk")
-
-    karin, karin_jar = opener()
-    karin_login = request(karin, "POST", f"{base}/login", {"username": karin_name, "password": karin_password})
-    check(karin_login.status == 303, f"login {karin_name}")
-    home = request(karin, "GET", f"{base}/").read().decode()
-    check(secret not in home and title not in home, "private topic is invisible")
-
-    offered = request(chris, "POST", f"{base}/topics/{topic_id}/offer")
-    check(offered.status == 303, "offer sent")
-    sealed = request(karin, "GET", f"{base}/topics/{topic_id}").read().decode()
-    check(title in sealed and secret not in sealed, "offer shows the title and hides the body")
-
-    opened = request(karin, "POST", f"{base}/topics/{topic_id}/accept")
-    check(opened.status == 303, "offer opened")
-    shared = request(karin, "GET", f"{base}/topics/{topic_id}").read().decode()
-    check(secret in shared, "opened topic shows the body")
-
-    line = "deploy-check-chat-line"
-    karin_sock, karin_rest = ws_connect(base, f"/ws/topics/{topic_id}", cookie_header(karin_jar))
-    chris_sock, chris_rest = ws_connect(base, f"/ws/topics/{topic_id}", cookie_header(chris_jar))
-    presence, karin_rest = ws_recv(karin_sock, karin_rest)
-    check(isinstance(presence, dict) and presence.get("type") == "presence", "chat presence")
-    _, chris_rest = ws_recv(chris_sock, chris_rest)
-    ws_send(chris_sock, {"type": "chat", "body": line})
-    seen = None
-    for _ in range(4):
-        message, karin_rest = ws_recv(karin_sock, karin_rest)
-        if isinstance(message, dict) and message.get("body") == line:
-            seen = message
-            break
-    check(seen is not None, "chat line arrives")
-
-    revoked = request(chris, "POST", f"{base}/topics/{topic_id}/revoke")
-    check(revoked.status == 303, "topic pulled back")
-    karin_sock.settimeout(0.2)
+    marker = uuid.uuid4().hex[:8]
+    secret = f"deploy-check-body-only-chris-should-see-this-before-open-{marker}"
+    title = f"Deploy check {marker}"
+    line = f"deploy-check-chat-line-{marker}"
+    topic_id = ""
+    chris: urllib.request.OpenerDirector | None = None
+    karin: urllib.request.OpenerDirector | None = None
+    karin_sock = None
+    chris_sock = None
     try:
-        while True:
-            extra = karin_sock.recv(4096)
-            if not extra:
+        health_op, _ = opener()
+        health = request(health_op, "GET", f"{base}/health")
+        body = health.read().decode()
+        check(health.status == 200 and '"ok":true' in body.replace(" ", ""), "/health")
+
+        chris, chris_jar = opener()
+        bad = request(chris, "POST", f"{base}/login", {"username": chris_name, "password": "nope"})
+        check(bad.status == 401, "wrong password is rejected")
+
+        chris, chris_jar = opener()
+        logged_in = request(chris, "POST", f"{base}/login", {"username": chris_name, "password": chris_password})
+        check(logged_in.status == 303, f"login {chris_name}")
+        created = request(chris, "POST", f"{base}/topics", {"title": title, "prompt": secret})
+        location = created.headers.get("Location", "")
+        topic_id = location.rstrip("/").rsplit("/", 1)[-1]
+        check(created.status == 303 and topic_id.isdigit(), "topic kept on the desk")
+
+        karin, karin_jar = opener()
+        karin_login = request(karin, "POST", f"{base}/login", {"username": karin_name, "password": karin_password})
+        check(karin_login.status == 303, f"login {karin_name}")
+        home = request(karin, "GET", f"{base}/").read().decode()
+        check(secret not in home and title not in home, "private topic is invisible")
+
+        offered = request(chris, "POST", f"{base}/topics/{topic_id}/offer")
+        check(offered.status == 303, "offer sent")
+        sealed = request(karin, "GET", f"{base}/topics/{topic_id}").read().decode()
+        check(title in sealed and secret not in sealed, "offer shows the title and hides the body")
+
+        opened = request(karin, "POST", f"{base}/topics/{topic_id}/accept")
+        check(opened.status == 303, "offer opened")
+        shared = request(karin, "GET", f"{base}/topics/{topic_id}").read().decode()
+        check(secret in shared, "opened topic shows the body")
+
+        karin_sock, karin_rest = ws_connect(base, f"/ws/topics/{topic_id}", cookie_header(karin_jar))
+        chris_sock, chris_rest = ws_connect(base, f"/ws/topics/{topic_id}", cookie_header(chris_jar))
+        presence, karin_rest = ws_recv(karin_sock, karin_rest)
+        check(isinstance(presence, dict) and presence.get("type") == "presence", "chat presence")
+        _, chris_rest = ws_recv(chris_sock, chris_rest)
+        ws_send(chris_sock, {"type": "chat", "body": line})
+        seen = None
+        for _ in range(4):
+            message, karin_rest = ws_recv(karin_sock, karin_rest)
+            if isinstance(message, dict) and message.get("body") == line:
+                seen = message
                 break
-            karin_rest += extra
-    except (TimeoutError, socket.timeout):
-        pass
-    karin_sock.settimeout(15)
-    ws_send(karin_sock, {"type": "chat", "body": "after revoke"})
-    closed = None
-    for _ in range(6):
-        message, karin_rest = ws_recv(karin_sock, karin_rest)
-        if isinstance(message, int):
-            closed = message
-            break
-    check(closed == 4404, "chat closes after revoke")
-    hidden = request(karin, "GET", f"{base}/topics/{topic_id}")
-    check(hidden.status in {302, 303} or secret not in hidden.read().decode(), "body is hidden again")
-    karin_sock.close()
-    chris_sock.close()
-    print("Between is up.")
+        check(seen is not None, "chat line arrives")
+
+        revoked = request(chris, "POST", f"{base}/topics/{topic_id}/revoke")
+        check(revoked.status == 303, "topic pulled back")
+        karin_sock.settimeout(0.2)
+        try:
+            while True:
+                extra = karin_sock.recv(4096)
+                if not extra:
+                    break
+                karin_rest += extra
+        except (TimeoutError, socket.timeout):
+            pass
+        karin_sock.settimeout(15)
+        ws_send(karin_sock, {"type": "chat", "body": "after revoke"})
+        closed = None
+        for _ in range(6):
+            message, karin_rest = ws_recv(karin_sock, karin_rest)
+            if isinstance(message, int):
+                closed = message
+                break
+        check(closed == 4404, "chat closes after revoke")
+        hidden = request(karin, "GET", f"{base}/topics/{topic_id}")
+        check(hidden.status in {302, 303} or secret not in hidden.read().decode(), "body is hidden again")
+        print("Between is up.")
+    finally:
+        if karin_sock is not None:
+            karin_sock.close()
+        if chris_sock is not None:
+            chris_sock.close()
+        if chris is not None and topic_id:
+            try:
+                request(chris, "POST", f"{base}/topics/{topic_id}/revoke")
+                request(chris, "POST", f"{base}/topics/{topic_id}/delete")
+            except OSError:
+                pass
 
 
 if __name__ == "__main__":

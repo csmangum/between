@@ -40,4 +40,4 @@ fi
 IP="$(gcloud compute addresses describe "$ADDRESS_NAME" --region="$REGION" --format='value(address)')"
 echo
 echo "Public IP: $IP"
-echo "Point an A record at this address, then follow deploy/gcp/RUNBOOK.md from step 3."
+echo "Point an A record at this address, then follow deploy/gcp/RUNBOOK.md from step 2."

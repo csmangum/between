@@ -12,6 +12,26 @@ tar -C "$ROOT" \
   --exclude=.git \
   --exclude='deploy/gcp/.env' \
   -czf - . \
-| gcloud compute ssh "$NAME" --zone="$ZONE" --command='mkdir -p ~/between && tar -xzf - -C ~/between'
+| gcloud compute ssh "$NAME" --zone="$ZONE" --command='
+set -euo pipefail
+tmp="$HOME/between.next"
+old="$HOME/between.old"
+rm -rf "$tmp" "$old"
+mkdir -p "$tmp"
+tar -xzf - -C "$tmp"
+if [ -f "$HOME/between/deploy/gcp/.env" ]; then
+  mkdir -p "$tmp/deploy/gcp"
+  cp "$HOME/between/deploy/gcp/.env" "$tmp/deploy/gcp/.env"
+fi
+if [ -d "$HOME/between/backups" ]; then
+  cp -a "$HOME/between/backups" "$tmp/backups"
+fi
+if [ -d "$HOME/between" ]; then
+  find "$HOME/between" -maxdepth 1 -type f -name "*.tgz" -exec cp {} "$tmp/" \;
+  mv "$HOME/between" "$old"
+fi
+mv "$tmp" "$HOME/between"
+rm -rf "$old"
+'
 
 echo "Copied to ${NAME}:~/between"

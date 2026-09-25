@@ -2,7 +2,7 @@
 
 One `e2-micro` VM in `us-central1`, Caddy for HTTPS, and the two accounts in `deploy/gcp/.env`. Chris and Karin open the site in a browser. Cloudflare is not part of this path.
 
-The VM and its 30 GB standard disk stay inside Always Free. The public IPv4 address is about **$0.005 per hour** (about $3.65 per month) while the VM is on. Stop the VM when you want that charge to pause, and start it again before anyone needs the room. A reserved address that is not attached to a running VM costs more, so leave it attached.
+The VM and its 30 GB standard disk stay inside Always Free. The public IPv4 address is about **$0.005 per hour** (about $3.65 per month). Stopping the VM pauses compute usage, but does not remove external IP charges. To avoid the IP charge, release the reservation (and lose that address), then reserve a new one when you start the VM again.
 
 You need:
 
@@ -120,14 +120,17 @@ python3 deploy/gcp/smoke_test.py --base-url https://between.example.com --env de
 
 ## Backup
 
-From the VM:
+From the VM, stop writes before copying the `between_between-data` volume:
 
 ```bash
-sudo docker run --rm -v between_between-data:/data -v "$PWD":/backup alpine \
-  tar czf /backup/between-data.tgz -C /data .
+cd ~/between
+sudo mkdir -p backups
+sudo bash -lc 'set -euo pipefail; trap "docker compose --env-file deploy/gcp/.env -f deploy/gcp/docker-compose.yml up -d" EXIT; \
+  docker compose --env-file deploy/gcp/.env -f deploy/gcp/docker-compose.yml stop between caddy; \
+  docker run --rm -v between_between-data:/data -v "$PWD":/backup alpine tar czf /backup/backups/between-data.tgz -C /data .'
 ```
 
-Copy `between-data.tgz` off the VM. That file is the whole room.
+Copy `backups/between-data.tgz` off the VM and confirm restore in a throwaway directory before relying on it.
 
 ## Stop and start
 

@@ -481,6 +481,19 @@ def revoke_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
+@app.post("/topics/{topic_id}/delete")
+def delete_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    topic = db.get(Topic, topic_id)
+    if topic and topic.created_by == user and topic.share_status == "private":
+        store.delete_topic_files(topic.id)
+        db.delete(topic)
+        db.commit()
+        flash(request, "Removed from your desk.")
+        return RedirectResponse("/", status_code=303)
+    return RedirectResponse(f"/topics/{topic_id}", status_code=303)
+
+
 @app.post("/writings/{writing_id}/offer")
 def offer_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
     user = require_user(request)

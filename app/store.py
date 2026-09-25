@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 
 from .db import DATABASE_URL
@@ -116,3 +117,20 @@ def write_shared(topic: Topic, writing: Writing | None = None, comment: Comment 
     path = folder / "topic.md"
     path.write_text(f"# {topic.title}\n\n{topic.prompt or ''}\n", encoding="utf-8")
     return path
+
+
+def delete_topic_files(topic_id: int) -> None:
+    pattern = f"{topic_id:04d}-*"
+    local_root = data_root() / "local"
+    if local_root.exists():
+        for user_dir in local_root.iterdir():
+            if not user_dir.is_dir():
+                continue
+            for folder in user_dir.glob(pattern):
+                if folder.is_dir():
+                    shutil.rmtree(folder, ignore_errors=True)
+    shared_root = data_root() / "shared"
+    if shared_root.exists():
+        for folder in shared_root.glob(pattern):
+            if folder.is_dir():
+                shutil.rmtree(folder, ignore_errors=True)
