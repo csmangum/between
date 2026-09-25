@@ -2,21 +2,43 @@ services:
   between:
     build: .
     ports:
-      - "8000:8000"
+      # Loopback only. Put Caddy or nginx with HTTPS in front; never expose 8000 directly.
+      - "127.0.0.1:8000:8000"
     environment:
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       APP_NAME: ${APP_NAME:-Between}
       USER1_NAME: ${USER1_NAME:-chris}
       USER1_DISPLAY: ${USER1_DISPLAY:-Chris}
-      USER1_PASSWORD: ${USER1_PASSWORD:?USER1_PASSWORD is required}
+      USER1_PASSWORD: ${USER1_PASSWORD:-}
+      USER1_PASSWORD_HASH: ${USER1_PASSWORD_HASH:-}
       USER2_NAME: ${USER2_NAME:-friend}
       USER2_DISPLAY: ${USER2_DISPLAY:-Friend}
-      USER2_PASSWORD: ${USER2_PASSWORD:?USER2_PASSWORD is required}
+      USER2_PASSWORD: ${USER2_PASSWORD:-}
+      USER2_PASSWORD_HASH: ${USER2_PASSWORD_HASH:-}
+      HTTPS_ONLY: ${HTTPS_ONLY:-true}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      SESSION_DAYS: ${SESSION_DAYS:-7}
       XAI_API_KEY: ${XAI_API_KEY:-}
       AGENT_API_KEY: ${AGENT_API_KEY:-}
       AGENT_BASE_URL: ${AGENT_BASE_URL:-https://api.x.ai/v1}
       AGENT_MODEL: ${AGENT_MODEL:-grok-4}
       DATABASE_URL: sqlite:////data/between.db
+      # The port is bound to loopback, so only the local reverse proxy can reach it;
+      # trust its X-Forwarded-* headers for real client addresses and scheme.
+      FORWARDED_ALLOW_IPS: "*"
     volumes:
-      - ./data:/data
+      # A named volume is owned by the container user out of the box. To keep the
+      # markdown mirrors in ./data instead, use "./data:/data" and run
+      # `sudo chown -R 10001:10001 data && chmod 700 data` once.
+      - between-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: unless-stopped
+
+volumes:
+  between-data:
