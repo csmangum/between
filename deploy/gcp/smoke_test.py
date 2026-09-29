@@ -2,7 +2,11 @@
 """Hit a running Between site and walk the two-person path.
 
 Usage:
+  SMOKE_USER1_PASSWORD=... SMOKE_USER2_PASSWORD=... \
   python3 deploy/gcp/smoke_test.py --base-url https://between.example.com --env deploy/gcp/.env
+
+The .env only carries password hashes, so the plaintext passwords come from the environment
+(or --user1-password / --user2-password). USERn_PASSWORD in the .env still works as a fallback.
 """
 
 from __future__ import annotations
@@ -166,13 +170,17 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--env", required=True)
+    parser.add_argument("--user1-password", default=os.environ.get("SMOKE_USER1_PASSWORD"))
+    parser.add_argument("--user2-password", default=os.environ.get("SMOKE_USER2_PASSWORD"))
     args = parser.parse_args()
     env = load_env(args.env)
     base = args.base_url.rstrip("/")
     chris_name = env.get("USER1_NAME", "chris")
     karin_name = env.get("USER2_NAME", "karin")
-    chris_password = env["USER1_PASSWORD"]
-    karin_password = env["USER2_PASSWORD"]
+    chris_password = args.user1_password or env.get("USER1_PASSWORD")
+    karin_password = args.user2_password or env.get("USER2_PASSWORD")
+    if not chris_password or not karin_password:
+        raise SystemExit("FAIL set SMOKE_USER1_PASSWORD and SMOKE_USER2_PASSWORD (or --user1-password/--user2-password)")
     marker = uuid.uuid4().hex[:8]
     secret = f"deploy-check-body-only-chris-should-see-this-before-open-{marker}"
     title = f"Deploy check {marker}"

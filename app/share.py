@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal, Protocol, assert_never
 
-from .models import Writing, utcnow
+from .models import Comment, Topic, Writing, utcnow
 
 ShareStatus = Literal["private", "offered", "shared"]
 
@@ -74,6 +74,19 @@ def fold_revision_into_private(writing: Writing) -> None:
         writing.title = writing.revision_title or ""
         writing.body = writing.revision_body
     clear_revision(writing)
+
+
+def fold_topic(topic: Topic) -> tuple[list[Writing], list[Comment]]:
+    """The topic left the table: every writing and note inside returns to its own author's desk.
+    Returns what changed so the caller can rewrite mirrors."""
+    writings = [w for w in topic.writings if w.share_status != "private" or w.revision_status]
+    comments = [c for c in topic.comments if c.share_status != "private"]
+    for w in writings:
+        fold_revision_into_private(w)
+        set_status(w, "private")
+    for c in comments:
+        set_status(c, "private")
+    return writings, comments
 
 
 def set_status(obj: Shareable, status: ShareStatus) -> None:

@@ -1,15 +1,45 @@
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 
 import httpx
+from sqlalchemy.orm import Session
 
 from . import access, auth
-from .models import Topic
+from .models import Preference, Topic, utcnow
+
+CONSENT_KEY = "agent_consent"
 
 
 def configured() -> bool:
     return bool(os.getenv("AGENT_API_KEY") or os.getenv("XAI_API_KEY") or os.getenv("OPENAI_API_KEY"))
+
+
+def provider_host() -> str:
+    """Where the readable record goes when someone asks for a draft. Shown to both people."""
+    _, base, _ = _settings()
+    return urlparse(base).hostname or base
+
+
+def consents(db: Session) -> dict[str, bool]:
+    rows = db.query(Preference).filter(Preference.key == CONSENT_KEY).all()
+    granted = {row.user for row in rows if row.value == "yes"}
+    return {name: name in granted for name in auth.load_people()}
+
+
+def set_consent(db: Session, user: str, allow: bool) -> None:
+    row = db.query(Preference).filter(Preference.user == user, Preference.key == CONSENT_KEY).one_or_none()
+    if row is None:
+        row = Preference(user=user, key=CONSENT_KEY)
+        db.add(row)
+    row.value = "yes" if allow else "no"
+    row.updated_at = utcnow()
+
+
+def allowed(db: Session) -> bool:
+    """Drafting reads the other person's opened words, so both people must have said yes."""
+    return configured() and all(consents(db).values())
 
 
 def _settings() -> tuple[str, str, str]:
@@ -23,12 +53,14 @@ def _settings() -> tuple[str, str, str]:
 
 
 def archive_excerpt(topic: Topic, user: str) -> str:
-    """Only what this person is already allowed to read."""
+    """Only shared material that both people have opened."""
+    if topic.share_status != "shared":
+        return ""
     lines = [f"# {topic.title}", ""]
     if topic.prompt:
         lines += [topic.prompt, ""]
     for w in topic.writings:
-        if not access.writing_open(user, w):
+        if w.share_status != "shared":
             continue
         heading = w.title or "Untitled writing"
         lines += [
@@ -38,14 +70,12 @@ def archive_excerpt(topic: Topic, user: str) -> str:
             w.body,
             "",
         ]
-        if w.author == user and w.revision_status and w.revision_body:
-            lines += ["Revision still on your desk:", w.revision_body, ""]
         for c in topic.comments:
-            if c.writing_id != w.id or not access.comment_open(user, c):
+            if c.writing_id != w.id or c.share_status != "shared":
                 continue
             lines.append(f"- Comment by {auth.display_for(c.author)}: {c.body}")
         lines.append("")
-    loose = [c for c in topic.comments if c.writing_id is None and access.comment_open(user, c)]
+    loose = [c for c in topic.comments if c.writing_id is None and c.share_status == "shared"]
     if loose:
         lines.append("## Topic comments")
         for c in loose:
@@ -59,6 +89,8 @@ def archive_excerpt(topic: Topic, user: str) -> str:
 
 
 def draft_reply(topic: Topic, user: str) -> str:
+    if topic.share_status != "shared":
+        raise RuntimeError("private-topic")
     key, base, model = _settings()
     if not key:
         raise RuntimeError("missing-key")

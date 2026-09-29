@@ -18,7 +18,7 @@ def _default_db_path() -> str:
     return f"sqlite:///{data / 'between.db'}"
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", _default_db_path())
+DATABASE_URL = os.getenv("DATABASE_URL") or _default_db_path()
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args, pool_pre_ping=True)

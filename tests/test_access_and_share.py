@@ -80,6 +80,17 @@ def test_topic_visibility_matrix():
     assert access.topic_open("friend", shared)
 
 
+def test_topic_prompt_requires_creator_or_shared_topic():
+    private = _topic(prompt="creator prompt")
+    revoked = _topic(share_status="private", prompt="creator prompt", writings=[_writing(author="friend")])
+    shared = _topic(share_status="shared", prompt="creator prompt")
+
+    assert access.topic_prompt_open("chris", private)
+    assert not access.topic_prompt_open("friend", private)
+    assert not access.topic_prompt_open("friend", revoked)
+    assert access.topic_prompt_open("friend", shared)
+
+
 def test_writing_and_comment_gates():
     writing = _writing(share_status="offered", author="chris")
     comment = _comment(share_status="offered", author="chris")

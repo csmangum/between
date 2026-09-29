@@ -1,9 +1,13 @@
+"""Markdown mirrors of the record on disk. The database is the source of truth; these files
+exist so the private/shared boundary is visible in the filesystem. MARKDOWN_MIRROR=false turns them off."""
+
 from __future__ import annotations
 
 import re
 import shutil
 from pathlib import Path
 
+from . import config
 from .db import DATABASE_URL
 from .models import Comment, Topic, Writing
 
@@ -26,6 +30,12 @@ def _topic_dir(base: Path, topic: Topic) -> Path:
     return folder
 
 
+def _existing_topic_dirs(base: Path, topic_id: int) -> list[Path]:
+    if not base.exists():
+        return []
+    return [p for p in base.glob(f"{topic_id:04d}-*") if p.is_dir()]
+
+
 def _stable_writing_path(folder: Path, writing: Writing) -> Path:
     for legacy in folder.glob(f"writing-{writing.id}-*.md"):
         legacy.unlink(missing_ok=True)
@@ -40,6 +50,8 @@ def revision_path(writing: Writing) -> Path:
 
 def write_revision(writing: Writing) -> Path | None:
     """The unopened revision stays in the author's local folder."""
+    if not config.MARKDOWN_MIRROR:
+        return None
     path = revision_path(writing)
     if not writing.revision_status or not writing.revision_body:
         path.unlink(missing_ok=True)
@@ -54,8 +66,10 @@ def write_revision(writing: Writing) -> Path | None:
     return path
 
 
-def write_local(topic: Topic, writing: Writing | None = None, comment: Comment | None = None) -> Path:
+def write_local(topic: Topic, writing: Writing | None = None, comment: Comment | None = None) -> Path | None:
     """Keep the author's copy on disk. The other person never reads this path."""
+    if not config.MARKDOWN_MIRROR:
+        return None
     if writing is not None:
         root = data_root() / "local" / writing.author
     elif comment is not None:
@@ -94,6 +108,8 @@ def write_local(topic: Topic, writing: Writing | None = None, comment: Comment |
 
 def write_shared(topic: Topic, writing: Writing | None = None, comment: Comment | None = None) -> Path | None:
     """Only called after both people have agreed."""
+    if not config.MARKDOWN_MIRROR:
+        return None
     if topic.share_status != "shared" and writing is None and comment is None:
         return None
     folder = _topic_dir(data_root() / "shared", topic)
@@ -119,18 +135,22 @@ def write_shared(topic: Topic, writing: Writing | None = None, comment: Comment 
     return path
 
 
-def delete_topic_files(topic_id: int) -> None:
-    pattern = f"{topic_id:04d}-*"
-    local_root = data_root() / "local"
-    if local_root.exists():
-        for user_dir in local_root.iterdir():
-            if not user_dir.is_dir():
-                continue
-            for folder in user_dir.glob(pattern):
-                if folder.is_dir():
-                    shutil.rmtree(folder, ignore_errors=True)
-    shared_root = data_root() / "shared"
-    if shared_root.exists():
-        for folder in shared_root.glob(pattern):
-            if folder.is_dir():
-                shutil.rmtree(folder, ignore_errors=True)
+def remove_shared(topic: Topic, writing: Writing | None = None, comment: Comment | None = None) -> None:
+    """Pulling something back removes its shared copy from disk, not only from the page."""
+    for folder in _existing_topic_dirs(data_root() / "shared", topic.id):
+        if writing is not None:
+            (folder / f"writing-{writing.id}.md").unlink(missing_ok=True)
+            for path in folder.glob(f"writing-{writing.id}-*.md"):
+                path.unlink(missing_ok=True)
+        elif comment is not None:
+            (folder / f"comment-{comment.id}.md").unlink(missing_ok=True)
+        else:
+            shutil.rmtree(folder, ignore_errors=True)
+
+
+def delete_topic_files(topic: Topic) -> None:
+    """Only the creator's local mirror and the shared mirror. Another person's desk is never touched."""
+    for folder in _existing_topic_dirs(data_root() / "local" / topic.created_by, topic.id):
+        shutil.rmtree(folder, ignore_errors=True)
+    for folder in _existing_topic_dirs(data_root() / "shared", topic.id):
+        shutil.rmtree(folder, ignore_errors=True)

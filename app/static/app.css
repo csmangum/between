@@ -872,6 +872,24 @@ code {
 .agent-draft {
   margin-bottom: 14px;
 }
+.offer-band {
+  margin: 0 0 22px;
+  border-color: var(--accent);
+}
+.offer-band .lede {
+  margin: 4px 0 12px;
+}
+.drafting {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-soft);
+}
+.drafting .compose-title {
+  font-size: 19px;
+}
+.drafting .actions {
+  margin-top: 8px;
+}
 .edit-fold {
   margin: 10px 0 16px;
   border: 1px solid var(--line-soft);

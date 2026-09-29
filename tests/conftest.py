@@ -13,7 +13,7 @@ TEST_ROOT = Path(tempfile.mkdtemp(prefix=f"between-tests-{os.getenv('PYTEST_XDIS
 TEST_DB = TEST_ROOT / "between.db"
 
 os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
-os.environ["SECRET_KEY"] = "test-secret"
+os.environ["SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-the-startup-check"
 os.environ["USER1_NAME"] = "chris"
 os.environ["USER1_DISPLAY"] = "Chris"
 os.environ["USER1_PASSWORD"] = "pass1"
@@ -25,6 +25,7 @@ from app.db import Base, engine, get_db  # noqa: E402
 from app.hub import hub  # noqa: E402
 from app.main import app  # noqa: E402
 from app.markdown_render import clear_markdown_cache  # noqa: E402
+from app.throttle import login_throttle  # noqa: E402
 
 TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base.metadata.create_all(bind=engine)
@@ -45,6 +46,7 @@ app.dependency_overrides[get_db] = _override_db
 def reset_state():
     clear_markdown_cache()
     hub.rooms.clear()
+    login_throttle.reset()
     with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             conn.execute(table.delete())

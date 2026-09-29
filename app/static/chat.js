@@ -1,13 +1,16 @@
 (() => {
-  const config = window.BetweenChat;
-  if (!config) return;
-
   const log = document.getElementById("chat-log");
   const form = document.getElementById("chat-form");
   const input = document.getElementById("chat-body");
   const presence = document.getElementById("presence");
   const limit = document.getElementById("chat-limit");
   if (!log || !form || !input || !presence) return;
+  const config = {
+    topicId: log.dataset.topicId,
+    me: log.dataset.me,
+    display: log.dataset.display,
+  };
+  if (!config.topicId || !config.me) return;
 
   const maxLength = 4000;
   const proto = location.protocol === "https:" ? "wss" : "ws";
