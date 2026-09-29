@@ -264,7 +264,8 @@ def test_accept_writing_requires_shared_topic(client, db_session: Session):
     assert response.status_code == 303
     db_session.expire_all()
     writing = db_session.get(Writing, writing.id)
-    assert writing.share_status == "offered"
+    # Pulling the topic back folds every sealed page onto its author's desk.
+    assert writing.share_status == "private"
 
 
 def test_decline_writing_requires_shared_topic(client, db_session: Session):
@@ -288,7 +289,7 @@ def test_decline_writing_requires_shared_topic(client, db_session: Session):
     assert response.status_code == 303
     db_session.expire_all()
     writing = db_session.get(Writing, writing.id)
-    assert writing.share_status == "offered"
+    assert writing.share_status == "private"
 
 
 def test_comment_actions_require_shared_topic(client, db_session: Session):
@@ -314,7 +315,7 @@ def test_comment_actions_require_shared_topic(client, db_session: Session):
     assert decline.status_code == 303
     db_session.expire_all()
     comment = db_session.get(Comment, comment.id)
-    assert comment.share_status == "offered"
+    assert comment.share_status == "private"
 
 
 def test_static_cache_header(client):

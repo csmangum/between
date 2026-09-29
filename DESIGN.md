@@ -251,7 +251,8 @@ The markdown split (`local/` vs `shared/`) exists so the intended boundary is vi
 - Session cookie auth, two hard-coded people
 - WebSocket `/ws/topics/{id}` for chat, accepted only when the topic is `shared`
 - Docker Compose for hosting; `run.sh` for a laptop
-- No third-party services, no analytics, no email
+- No analytics, no email. Fonts are served from the app itself, so a visit is reported to nobody.
+- One optional third party: the drafting model at `AGENT_BASE_URL`. It is off unless a key is set **and both people have allowed it from their desk**. When someone asks for a draft, what that person can already read on the topic — including the other person's opened pages and recent margin lines — is sent to that provider. Private pages never are. Either person can withdraw at any time and the button disappears for both.
 
 This stack is a choice: one process a person can read, run, and back up. It is not a platform.
 
@@ -264,8 +265,15 @@ In scope for v1:
 - No public registration
 - Bodies withheld from the counterpart’s HTTP responses until `shared`
 - Export filtered the same way as the archive
-- Markdown sanitized on render (bleach)
-- Session secret required in production
+- Markdown sanitized on render (nh3 allowlist; no images, links open away with `noopener noreferrer`)
+- The process refuses to start with a missing or sample `SECRET_KEY`, or with sample passwords. `BETWEEN_DEV=1` relaxes only the key, for a laptop.
+- Passwords are stored as scrypt hashes (`USERn_PASSWORD_HASH`, from `python -m app.auth`). A plaintext `USERn_PASSWORD` still works and is hashed in memory at start.
+- Login is throttled per address and per name with exponential backoff after three misses; every miss is logged.
+- Sessions: `SameSite=Strict`, `HttpOnly`, `Secure` under HTTPS, seven idle days (sliding), thirty days absolute, and a keyed fingerprint of the password hash so changing a password ends every session for that person.
+- Every response carries a strict CSP (`script-src 'self'`, `frame-ancestors 'none'`, `form-action 'self'`), `Referrer-Policy: same-origin`, `nosniff`, and `Cache-Control: no-store` on anything that is not a static file. HSTS when `HTTPS_ONLY`.
+- State-changing requests and socket upgrades are refused when the browser names a different `Origin`.
+- The live margin caps seats per person, drops floods, frees a seat on any malformed frame, and is closed for everyone the moment a topic leaves the table.
+- The container runs as an unprivileged user on a read-only filesystem with all capabilities dropped; the app port binds to loopback in both compose files.
 
 Out of scope for v1, and therefore not promised:
 
@@ -275,7 +283,16 @@ Out of scope for v1, and therefore not promised:
 - Audit log of every offer/accept that survives revoke
 - Fine-grained edit history
 
-Revoke hides the body from future reads. It does not un-read a body already seen, and it does not wipe a shared markdown file the counterpart may have already exported. Consent is about access now, not about erasing memory. The UI should not pretend otherwise.
+Revoke hides the body from future reads and removes the shared markdown copy from `data/shared/`. It does not un-read a body already seen, and it does not chase an export the counterpart already took. Consent is about access now, not about erasing memory. The UI should not pretend otherwise.
+
+### What the other person can see before opening
+
+Stated so neither person is surprised:
+
+- The **title** of a sealed topic, and of a sealed writing inside a shared topic. Never the prompt or the body.
+- A **count** of sealed offers waiting for them.
+- **Presence** in a shared topic’s margin: that you are in the room, and that you are typing.
+- Nothing about private topics, private writings, or private notes — not even that they exist.
 
 ---
 
@@ -297,7 +314,11 @@ This is the important flow. The room can be mutual while the work remains staged
 
 ### A revokes after B has read
 
-Status returns to private. B loses the body on the next load. B may still have an export from earlier. The app does not chase that copy.
+Status returns to private and **everything inside returns to its own author’s desk**: A’s shared writings and notes become private to A, B’s become private to B, and the margin closes for both at once. B loses A’s bodies on the next load; A loses B’s. B may still have an export from earlier. The app does not chase that copy.
+
+### B wrote inside A’s topic, then A pulled it back
+
+B’s words are B’s. The topic stays reachable to B (listed on B’s desk as *begun by A · your pages only*), showing the title and B’s own pages and nothing of A’s. B’s archive and exports keep them. A cannot delete a topic while it holds anything B wrote — only what A wrote is A’s to remove. If A offers the topic again, B sees the offer at the top of that same page rather than a consent wall.
 
 ---
 

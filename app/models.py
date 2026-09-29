@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -85,6 +85,19 @@ class Comment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     topic: Mapped[Topic] = relationship(back_populates="comments")
+
+
+class Preference(Base):
+    """Per-person switches. Today: whether they allow the drafting agent to read the shared record."""
+
+    __tablename__ = "preferences"
+    __table_args__ = (UniqueConstraint("user", "key", name="uq_preferences_user_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user: Mapped[str] = mapped_column(String(80))
+    key: Mapped[str] = mapped_column(String(40))
+    value: Mapped[str] = mapped_column(String(240), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
 class ChatMessage(Base):

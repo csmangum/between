@@ -35,18 +35,27 @@ If `docker` is not there yet, wait and try the SSH command again.
 
 ## 2. Put the app on the VM
 
-From your checkout:
+From your checkout (only committed files are sent; the script refuses to run with uncommitted changes, and never sends `.env`, `data/`, or tests):
 
 ```bash
 ./deploy/gcp/push.sh
 ```
 
-SSH in and write the account file. Passwords and `SECRET_KEY` must be long random strings, not the samples.
+On your own machine, make the two password hashes and a session key. Each person types their own password; the hash is what goes in the file.
+
+```bash
+python -m app.auth                                   # prompts, prints USER1_PASSWORD_HASH
+python -m app.auth                                   # again for USER2
+python3 -c 'import secrets; print(secrets.token_urlsafe(48))'   # SECRET_KEY
+```
+
+SSH in and write the account file. The app refuses to start with sample values.
 
 ```bash
 gcloud compute ssh between --zone=us-central1-a
 cd ~/between
 cp deploy/gcp/.env.example deploy/gcp/.env
+chmod 600 deploy/gcp/.env
 nano deploy/gcp/.env
 ```
 
@@ -58,10 +67,12 @@ Set:
 | `ACME_EMAIL` | an email Let's Encrypt can use for expiry notices |
 | `HTTPS_ONLY` | `true` |
 | `USER1_NAME` / `USER1_DISPLAY` | `chris` / `Chris` |
-| `USER1_PASSWORD` | Chris's password |
+| `USER1_PASSWORD_HASH` | the `scrypt$…` line for Chris |
 | `USER2_NAME` / `USER2_DISPLAY` | `karin` / `Karin` |
-| `USER2_PASSWORD` | Karin's password |
-| `SECRET_KEY` | a different long random string |
+| `USER2_PASSWORD_HASH` | the `scrypt$…` line for Karin |
+| `SECRET_KEY` | the random string |
+
+Changing a hash later signs that person out everywhere; changing `SECRET_KEY` signs everyone out.
 
 ## 3. Start it
 
@@ -90,11 +101,14 @@ You want `"ok": true`. Port 8000 is bound to the VM's loopback only. Browsers us
 
 ## 4. Test the deployment
 
-On your own machine, with the same `deploy/gcp/.env` you wrote (copy it back, or recreate it locally and do not commit it):
+On your own machine, with the same `deploy/gcp/.env` you wrote (copy it back, or recreate it locally and do not commit it). The file only holds hashes, so pass the two plaintext passwords through the environment:
 
 ```bash
+SMOKE_USER1_PASSWORD='…' SMOKE_USER2_PASSWORD='…' \
 python3 deploy/gcp/smoke_test.py --base-url https://between.example.com --env deploy/gcp/.env
 ```
+
+Note the login throttle: more than three wrong passwords in a row for a name or from one address adds a growing wait, so do not loop the smoke test on a bad password.
 
 The script logs in as both people, checks that a private page stays hidden, opens an offer, sends a chat line, and pulls the topic back. A passing run ends with `Between is up.`
 
@@ -113,24 +127,40 @@ Then in a browser:
 ./deploy/gcp/push.sh
 gcloud compute ssh between --zone=us-central1-a --command \
   'cd ~/between && sudo docker compose --env-file deploy/gcp/.env -f deploy/gcp/docker-compose.yml up -d --build'
+SMOKE_USER1_PASSWORD='…' SMOKE_USER2_PASSWORD='…' \
 python3 deploy/gcp/smoke_test.py --base-url https://between.example.com --env deploy/gcp/.env
+```
+
+The app container runs as uid 1000 on a read-only filesystem. The `between_between-data` volume was created by an earlier root-run container, so once after upgrading fix its ownership:
+
+```bash
+sudo docker run --rm -v between_between-data:/data alpine chown -R 1000:1000 /data
 ```
 
 `deploy/gcp/.env` on the VM is not in the copy. The archive lives in the `between_between-data` Docker volume, not in the git checkout.
 
 ## Backup
 
+The archive is every private word both of you have written. Encrypt it before it leaves the volume, and never leave a plaintext copy in the home directory. This uses [age](https://github.com/FiloSottile/age) with a passphrase; `sudo apt-get install -y age` on the VM once.
+
 From the VM, stop writes before copying the `between_between-data` volume:
 
 ```bash
 cd ~/between
-sudo mkdir -p backups
+sudo mkdir -p backups && sudo chmod 700 backups
 sudo bash -lc 'set -euo pipefail; trap "docker compose --env-file deploy/gcp/.env -f deploy/gcp/docker-compose.yml up -d" EXIT; \
   docker compose --env-file deploy/gcp/.env -f deploy/gcp/docker-compose.yml stop between caddy; \
-  docker run --rm -v between_between-data:/data -v "$PWD":/backup alpine tar czf /backup/backups/between-data.tgz -C /data .'
+  docker run --rm -v between_between-data:/data alpine tar cz -C /data . \
+  | age -p -o backups/between-data-$(date +%Y%m%d).tgz.age'
 ```
 
-Copy `backups/between-data.tgz` off the VM and confirm restore in a throwaway directory before relying on it.
+`age -p` asks for a passphrase; choose a long one and keep it somewhere that is not this VM. Copy the `.tgz.age` file off the VM (`gcloud compute scp between:~/between/backups/… .`) and confirm you can restore it in a throwaway directory before relying on it:
+
+```bash
+age -d between-data-YYYYMMDD.tgz.age | tar tz | head
+```
+
+Two more facts about what is on the VM's disk: the 1 GB swap file from `startup.sh` may hold pages of process memory, and Google encrypts the disk at rest with its own keys. If either matters to you, use a customer-managed key for the disk and turn swap off after the first image build.
 
 ## Stop and start
 

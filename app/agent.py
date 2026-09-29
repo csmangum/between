@@ -1,15 +1,45 @@
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 
 import httpx
+from sqlalchemy.orm import Session
 
 from . import access, auth
-from .models import Topic
+from .models import Preference, Topic, utcnow
+
+CONSENT_KEY = "agent_consent"
 
 
 def configured() -> bool:
     return bool(os.getenv("AGENT_API_KEY") or os.getenv("XAI_API_KEY") or os.getenv("OPENAI_API_KEY"))
+
+
+def provider_host() -> str:
+    """Where the readable record goes when someone asks for a draft. Shown to both people."""
+    _, base, _ = _settings()
+    return urlparse(base).hostname or base
+
+
+def consents(db: Session) -> dict[str, bool]:
+    rows = db.query(Preference).filter(Preference.key == CONSENT_KEY).all()
+    granted = {row.user for row in rows if row.value == "yes"}
+    return {name: name in granted for name in auth.load_people()}
+
+
+def set_consent(db: Session, user: str, allow: bool) -> None:
+    row = db.query(Preference).filter(Preference.user == user, Preference.key == CONSENT_KEY).one_or_none()
+    if row is None:
+        row = Preference(user=user, key=CONSENT_KEY)
+        db.add(row)
+    row.value = "yes" if allow else "no"
+    row.updated_at = utcnow()
+
+
+def allowed(db: Session) -> bool:
+    """Drafting reads the other person's opened words, so both people must have said yes."""
+    return configured() and all(consents(db).values())
 
 
 def _settings() -> tuple[str, str, str]:

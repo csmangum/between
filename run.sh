@@ -4,7 +4,16 @@ cd "$(dirname "$0")"
 
 if [ ! -f .env ]; then
   cp .env.example .env
-  echo "Created .env — edit the two account names and passwords before sharing."
+  key="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
+  sed -i.bak "s|^SECRET_KEY=.*|SECRET_KEY=${key}|" .env && rm -f .env.bak
+  chmod 600 .env
+  echo "Created .env with a fresh SECRET_KEY."
+  echo "Edit the two names and passwords (or run 'python -m app.auth' for hashes) before starting."
+  exit 1
+fi
+
+if [ "$(stat -c '%a' .env 2>/dev/null || stat -f '%Lp' .env)" != "600" ]; then
+  echo "warning: .env is readable by other users on this machine; run: chmod 600 .env" >&2
 fi
 
 set -a
@@ -19,5 +28,10 @@ fi
 source .venv/bin/activate
 pip install -q -r requirements.txt
 
-echo "Between is at http://127.0.0.1:8000"
-exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}" --reload
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-8000}"
+echo "Between is at http://${HOST}:${PORT}"
+if [ "$HOST" != "127.0.0.1" ] && [ "${HTTPS_ONLY:-}" = "" ]; then
+  echo "warning: listening beyond loopback without HTTPS. Anyone on this network can read the login." >&2
+fi
+exec uvicorn app.main:app --host "$HOST" --port "$PORT" --no-server-header ${RELOAD:+--reload}

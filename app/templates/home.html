@@ -38,6 +38,7 @@
               {% if t.share_status == 'private' and t.prompt %}<p class="prompt">{{ t.prompt }}</p>{% endif %}
               <div class="counts">
                 <span class="badge {{ t.share_status }}">{{ t.share_status|share_label }}</span>
+                {% if t.created_by != user %}<span>begun by {{ display_for(t.created_by) }} · your pages only</span>{% endif %}
                 {% if t.writing_count %}
                   <span>{{ t.writing_count|count_label("writing") }}</span>
                 {% else %}
@@ -93,6 +94,29 @@
       <textarea id="prompt" name="prompt" data-desk placeholder="Only you will see this until the topic is opened together."></textarea>
       <button class="full" type="submit">Keep on my desk</button>
     </form>
+
+    {% if agent_configured %}
+      <section class="drafting" id="drafting">
+        <h2 class="compose-title">Drafting help</h2>
+        <p class="panel-note">
+          When it is on, either of you can ask for a draft reply on an opened topic. The request sends what that person can already read — the topic, opened writings and notes, and recent margin lines from both of you — to <code>{{ agent_host }}</code>. Private pages are never sent. It only works while <strong>both</strong> of you allow it.
+        </p>
+        <p class="meta">
+          {% for name, allowed in agent_consents.items() %}
+            {{ display_for(name) }}: {{ "allows it" if allowed else "has not allowed it" }}{% if not loop.last %} · {% endif %}
+          {% endfor %}
+        </p>
+        <form method="post" action="/me/agent" class="actions">
+          {% if agent_consents.get(user) %}
+            <input type="hidden" name="allow" value="0">
+            <button class="ghost" type="submit">Withdraw my permission</button>
+          {% else %}
+            <input type="hidden" name="allow" value="1">
+            <button class="ghost" type="submit">Allow on my side</button>
+          {% endif %}
+        </form>
+      </section>
+    {% endif %}
   </aside>
 </div>
 {% endblock %}
