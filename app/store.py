@@ -139,7 +139,8 @@ def remove_shared(topic: Topic, writing: Writing | None = None, comment: Comment
     """Pulling something back removes its shared copy from disk, not only from the page."""
     for folder in _existing_topic_dirs(data_root() / "shared", topic.id):
         if writing is not None:
-            for path in folder.glob(f"writing-{writing.id}*.md"):
+            (folder / f"writing-{writing.id}.md").unlink(missing_ok=True)
+            for path in folder.glob(f"writing-{writing.id}-*.md"):
                 path.unlink(missing_ok=True)
         elif comment is not None:
             (folder / f"comment-{comment.id}.md").unlink(missing_ok=True)

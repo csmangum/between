@@ -147,11 +147,12 @@ From the VM, stop writes before copying the `between_between-data` volume:
 
 ```bash
 cd ~/between
-sudo mkdir -p backups && sudo chmod 700 backups
-sudo bash -lc 'set -euo pipefail; trap "docker compose --env-file deploy/gcp/.env -f deploy/gcp/docker-compose.yml up -d" EXIT; \
-  docker compose --env-file deploy/gcp/.env -f deploy/gcp/docker-compose.yml stop between caddy; \
-  docker run --rm -v between_between-data:/data alpine tar cz -C /data . \
-  | age -p -o backups/between-data-$(date +%Y%m%d).tgz.age'
+mkdir -p backups && chmod 700 backups
+set -euo pipefail
+trap 'sudo docker compose --env-file deploy/gcp/.env -f deploy/gcp/docker-compose.yml up -d' EXIT
+sudo docker compose --env-file deploy/gcp/.env -f deploy/gcp/docker-compose.yml stop between caddy
+sudo docker run --rm -v between_between-data:/data alpine tar cz -C /data . \
+  | age -p -o backups/between-data-$(date +%Y%m%d).tgz.age
 ```
 
 `age -p` asks for a passphrase; choose a long one and keep it somewhere that is not this VM. Copy the `.tgz.age` file off the VM (`gcloud compute scp between:~/between/backups/… .`) and confirm you can restore it in a throwaway directory before relying on it:

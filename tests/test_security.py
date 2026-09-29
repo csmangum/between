@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import time
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -8,10 +12,11 @@ from sqlalchemy.orm import Session
 from starlette.websockets import WebSocketDisconnect
 
 from app import agent, auth, config
+from app.db import SessionLocal
 from app.hub import hub
 from app.main import app
 from app.markdown_render import render_markdown
-from app.models import Comment, Topic, Writing
+from app.models import ChatMessage, Comment, Topic, Writing
 from app.store import data_root
 
 
@@ -88,6 +93,10 @@ def test_cross_site_post_is_refused(client: TestClient):
     assert foreign.status_code == 403
     null_origin = client.post("/topics", data={"title": "x"}, headers={"origin": "null"}, follow_redirects=False)
     assert null_origin.status_code == 403
+    wrong_scheme = client.post(
+        "/topics", data={"title": "x"}, headers={"origin": "https://testserver"}, follow_redirects=False
+    )
+    assert wrong_scheme.status_code == 403
     same = client.post("/topics", data={"title": "x"}, headers={"origin": "http://testserver"}, follow_redirects=False)
     assert same.status_code == 303
 
@@ -97,6 +106,17 @@ def test_cross_site_websocket_is_refused():
     topic_id = _shared_topic(a, b)
     with pytest.raises(WebSocketDisconnect) as exc:
         with a.websocket_connect(f"/ws/topics/{topic_id}", headers={"origin": "https://evil.example"}) as ws:
+            ws.receive_json()
+    assert exc.value.code == 4403
+
+
+def test_websocket_origin_must_match_request_scheme():
+    a, b = _pair()
+    topic_id = _shared_topic(a, b)
+    with pytest.raises(WebSocketDisconnect) as exc:
+        with a.websocket_connect(
+            f"/ws/topics/{topic_id}", headers={"origin": "https://testserver"}
+        ) as ws:
             ws.receive_json()
     assert exc.value.code == 4403
 
@@ -132,6 +152,21 @@ def test_password_hash_roundtrip():
     assert not auth.check_password("anything", "not-a-hash")
 
 
+def test_password_hash_cli_does_not_require_secret_key():
+    env = os.environ.copy()
+    env.pop("SECRET_KEY", None)
+    env.pop("BETWEEN_DEV", None)
+    result = subprocess.run(
+        [sys.executable, "-m", "app.auth"],
+        input="correct horse battery staple\n",
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
+    )
+    assert result.stdout.startswith("scrypt$")
+
+
 def test_session_validity_rules():
     person = auth.load_people()["chris"]
     session: dict = {}
@@ -165,7 +200,7 @@ def test_startup_refuses_sample_secret(monkeypatch):
 
 def test_topic_revoke_returns_everything_to_its_author(db_session: Session):
     a, b = _pair()
-    topic_id = _shared_topic(a, b, title="Together")
+    topic_id = _shared_topic(a, b, title="Together", prompt="creator-only-opening")
     a_wid = _writing(a, topic_id, "a-shared-body")
     b_wid = _writing(b, topic_id, "b-own-body")
     for who, wid in ((a, a_wid), (b, b_wid)):
@@ -183,12 +218,21 @@ def test_topic_revoke_returns_everything_to_its_author(db_session: Session):
     b_page = b.get(f"/topics/{topic_id}", follow_redirects=False)
     assert b_page.status_code == 200
     assert "b-own-body" in b_page.text and "a-shared-body" not in b_page.text
+    assert "creator-only-opening" not in b_page.text
     assert "pulled this topic back" in b_page.text
 
-    # B's desk lists it, B's export keeps it, and the shared mirror is gone.
-    assert "Together" in b.get("/").text
+    # B's desk, archive and exports keep their own pages but not the creator's prompt.
+    desk = b.get("/")
+    assert "Together" in desk.text and "creator-only-opening" not in desk.text
+    archive = b.get("/archive")
+    assert "b-own-body" in archive.text and "creator-only-opening" not in archive.text
     exported = b.get("/export.json").json()
     assert any(w["id"] == b_wid for t in exported["topics"] for w in t["writings"])
+    exported_topic = next(t for t in exported["topics"] if t["id"] == topic_id)
+    assert exported_topic["prompt"] == ""
+    assert "creator-only-opening" not in b.get("/export.md").text
+    assert "creator-only-opening" not in agent.archive_excerpt(db_session.get(Topic, topic_id), "friend")
+    assert "creator-only-opening" in a.get(f"/topics/{topic_id}").text
     assert not list(shared.rglob(f"{topic_id:04d}-*"))
     db_session.expire_all()
     assert {w.share_status for w in db_session.query(Writing).all()} == {"private"}
@@ -226,8 +270,14 @@ def test_writing_revoke_removes_shared_copy(db_session: Session):
     b.post(f"/writings/{wid}/accept", follow_redirects=False)
     shared = data_root() / "shared"
     assert list(shared.rglob(f"writing-{wid}.md"))
+    folder = next(shared.glob(f"{topic_id:04d}-*"))
+    unrelated_stable = folder / f"writing-{wid}0.md"
+    unrelated_legacy = folder / f"writing-{wid}0-older.md"
+    unrelated_stable.write_text("unrelated", encoding="utf-8")
+    unrelated_legacy.write_text("unrelated legacy", encoding="utf-8")
     a.post(f"/writings/{wid}/revoke", follow_redirects=False)
     assert not list(shared.rglob(f"writing-{wid}.md"))
+    assert unrelated_stable.exists() and unrelated_legacy.exists()
     assert list((data_root() / "local" / "chris").rglob(f"writing-{wid}.md"))
 
 
@@ -292,6 +342,42 @@ def test_websocket_seat_limit():
             ws.__exit__(None, None, None)
 
 
+def test_revoke_during_websocket_join_is_rechecked(monkeypatch):
+    a, b = _pair()
+    topic_id = _shared_topic(a, b)
+    original_join = hub.join
+
+    async def revoke_before_seat(topic_id, websocket, user):
+        with SessionLocal() as db:
+            topic = db.get(Topic, topic_id)
+            topic.share_status = "private"
+            db.commit()
+        await hub.close_room(topic_id)
+        return await original_join(topic_id, websocket, user)
+
+    monkeypatch.setattr(hub, "join", revoke_before_seat)
+    with b.websocket_connect(f"/ws/topics/{topic_id}") as ws:
+        assert ws.receive_json()["type"] == "presence"
+        with pytest.raises(WebSocketDisconnect) as exc:
+            ws.receive_json()
+    assert exc.value.code == 4404
+    assert topic_id not in hub.rooms
+
+
+def test_typing_frames_consume_the_websocket_flood_limit(db_session: Session):
+    a, b = _pair()
+    topic_id = _shared_topic(a, b)
+    with b.websocket_connect(f"/ws/topics/{topic_id}") as ws:
+        assert ws.receive_json()["type"] == "presence"
+        for _ in range(10):
+            ws.send_json({"type": "typing", "on": True})
+            assert ws.receive_json()["type"] == "presence"
+        ws.send_json({"type": "typing", "on": False})
+        ws.send_json({"type": "chat", "body": "must be rate limited"})
+    db_session.expire_all()
+    assert db_session.query(ChatMessage).count() == 0
+
+
 # --- drafting help needs both people -------------------------------------------------
 
 
@@ -323,6 +409,63 @@ def test_drafting_ui_absent_without_a_key(client: TestClient, monkeypatch):
         monkeypatch.delenv(name, raising=False)
     _login(client, "chris", "pass1")
     assert "Drafting help" not in client.get("/").text
+
+
+def test_drafting_excerpt_contains_only_shared_content():
+    topic = SimpleNamespace(
+        id=1,
+        title="Letters",
+        prompt="shared prompt",
+        share_status="shared",
+        writings=[
+            SimpleNamespace(
+                id=1,
+                author="chris",
+                share_status="shared",
+                title="Shared page",
+                body="shared writing",
+                revision_status="private",
+                revision_body="private revision",
+            ),
+            SimpleNamespace(
+                id=2,
+                author="chris",
+                share_status="private",
+                title="Private page",
+                body="private writing",
+            ),
+        ],
+        comments=[
+            SimpleNamespace(writing_id=1, share_status="shared", author="friend", body="shared comment"),
+            SimpleNamespace(writing_id=1, share_status="private", author="chris", body="private comment"),
+            SimpleNamespace(writing_id=None, share_status="private", author="chris", body="private loose comment"),
+        ],
+        messages=[SimpleNamespace(author="friend", body="shared chat")],
+    )
+    excerpt = agent.archive_excerpt(topic, "chris")
+
+    assert "shared prompt" in excerpt
+    assert "shared writing" in excerpt
+    assert "shared comment" in excerpt
+    assert "shared chat" in excerpt
+    assert "private writing" not in excerpt
+    assert "private comment" not in excerpt
+    assert "private loose comment" not in excerpt
+    assert "private revision" not in excerpt
+    topic.share_status = "private"
+    assert agent.archive_excerpt(topic, "chris") == ""
+
+
+def test_drafting_control_is_hidden_for_private_topics(client: TestClient, monkeypatch):
+    monkeypatch.setenv("AGENT_API_KEY", "test-key")
+    _login(client, "chris", "pass1")
+    created = client.post(
+        "/topics", data={"title": "Private", "prompt": ""}, follow_redirects=False
+    )
+    topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    page = client.get(f"/topics/{topic_id}").text
+    assert "Draft a reply" not in page
+    assert "Drafting help is off" not in page
 
 
 # --- markdown ---------------------------------------------------------------------------

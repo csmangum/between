@@ -43,12 +43,17 @@ def topic_visible(user: str, topic: Topic, contributor: bool | None = None) -> b
 
 
 def topic_open(user: str, topic: Topic, contributor: bool | None = None) -> bool:
-    """True when this person may read the topic's contents (their own words are always readable)."""
+    """True when the topic shell and this person's words are readable; prompt access is separate."""
     if topic.created_by == user:
         return True
     if topic.share_status == "shared":
         return True
     return contributed(user, topic) if contributor is None else contributor
+
+
+def topic_prompt_open(user: str, topic: Topic) -> bool:
+    """Only the creator and people sharing the topic may read its opening prompt."""
+    return topic.created_by == user or topic.share_status == "shared"
 
 
 def topic_awaits(user: str, topic: Topic) -> bool:

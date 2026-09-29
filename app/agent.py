@@ -53,12 +53,14 @@ def _settings() -> tuple[str, str, str]:
 
 
 def archive_excerpt(topic: Topic, user: str) -> str:
-    """Only what this person is already allowed to read."""
+    """Only shared material that both people have opened."""
+    if topic.share_status != "shared":
+        return ""
     lines = [f"# {topic.title}", ""]
     if topic.prompt:
         lines += [topic.prompt, ""]
     for w in topic.writings:
-        if not access.writing_open(user, w):
+        if w.share_status != "shared":
             continue
         heading = w.title or "Untitled writing"
         lines += [
@@ -68,14 +70,12 @@ def archive_excerpt(topic: Topic, user: str) -> str:
             w.body,
             "",
         ]
-        if w.author == user and w.revision_status and w.revision_body:
-            lines += ["Revision still on your desk:", w.revision_body, ""]
         for c in topic.comments:
-            if c.writing_id != w.id or not access.comment_open(user, c):
+            if c.writing_id != w.id or c.share_status != "shared":
                 continue
             lines.append(f"- Comment by {auth.display_for(c.author)}: {c.body}")
         lines.append("")
-    loose = [c for c in topic.comments if c.writing_id is None and access.comment_open(user, c)]
+    loose = [c for c in topic.comments if c.writing_id is None and c.share_status == "shared"]
     if loose:
         lines.append("## Topic comments")
         for c in loose:
@@ -89,6 +89,8 @@ def archive_excerpt(topic: Topic, user: str) -> str:
 
 
 def draft_reply(topic: Topic, user: str) -> str:
+    if topic.share_status != "shared":
+        raise RuntimeError("private-topic")
     key, base, model = _settings()
     if not key:
         raise RuntimeError("missing-key")

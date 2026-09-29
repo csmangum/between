@@ -12,13 +12,18 @@ import time
 from dataclasses import dataclass
 from typing import Any, MutableMapping
 
-from . import config
-
 SCRYPT_N = 2**14
 SCRYPT_R = 8
 SCRYPT_P = 1
 SCRYPT_LEN = 32
 SCRYPT_MAXMEM = 64 * 1024 * 1024
+SAMPLE_PASSWORDS = {
+    "",
+    "change-me",
+    "change-me-to-a-long-random-string",
+    "dev-only-change-me",
+    "test-secret",
+}
 SESSION_USER = "user"
 SESSION_FINGERPRINT = "fp"
 SESSION_ISSUED = "iat"
@@ -77,10 +82,14 @@ def check_password(password: str, encoded: str) -> bool:
 
 def _deterministic_salt(username: str) -> bytes:
     """Plaintext env passwords are hashed in memory; a stable salt keeps session fingerprints stable."""
+    from . import config
+
     return hmac.new(config.SECRET_KEY.encode("utf-8"), f"salt:{username}".encode("utf-8"), hashlib.sha256).digest()[:16]
 
 
 def _person(prefix: str) -> Person:
+    from . import config
+
     username = os.getenv(f"{prefix}_NAME", prefix.lower()).strip().lower()
     display = os.getenv(f"{prefix}_DISPLAY", username.title()).strip()
     encoded = os.getenv(f"{prefix}_PASSWORD_HASH", "").strip()
@@ -133,6 +142,8 @@ def display_for(username: str) -> str:
 def fingerprint(person: Person) -> str:
     """Changes when the password changes, so old sessions stop working. Keyed so the cookie
     (signed, not encrypted) does not carry an offline-crackable digest of the password."""
+    from . import config
+
     mac = hmac.new(config.SECRET_KEY.encode("utf-8"), person.password_hash.encode("utf-8"), hashlib.sha256)
     return mac.hexdigest()[:24]
 
@@ -148,6 +159,8 @@ def start_session(session: MutableMapping[str, Any], person: Person) -> None:
 
 def session_user(session: MutableMapping[str, Any]) -> str | None:
     """Return the logged-in username if the session is still valid, else clear it."""
+    from . import config
+
     username = session.get(SESSION_USER)
     if not username:
         return None
@@ -181,7 +194,7 @@ def _cli() -> None:
             raise SystemExit("Passwords did not match.")
     else:
         first = sys.stdin.readline().rstrip("\n")
-    if first in config.SAMPLE_SECRETS or len(first) < 8:
+    if first in SAMPLE_PASSWORDS or len(first) < 8:
         raise SystemExit("Choose a password of at least 8 characters that is not a sample value.")
     print(hash_password(first))
 

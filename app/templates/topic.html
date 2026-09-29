@@ -3,7 +3,7 @@
 {% block body %}
 <p class="meta"><a href="/">← Desk</a></p>
 <h1 class="page-title">{{ topic.title }}</h1>
-{% if topic.prompt %}<p class="lede">{{ topic.prompt }}</p>{% endif %}
+{% if topic_prompt %}<p class="lede">{{ topic_prompt }}</p>{% endif %}
 <p class="meta">
   Begun by {{ display_for(topic.created_by) }} · {{ topic.created_at|when_soft }}
   · <span class="badge {{ topic.share_status }}">{{ topic.share_status|share_label }}</span>
@@ -201,12 +201,12 @@
       {% elif agent_note == 'consent' %}
         <p class="error">Drafting help needs both of you to allow it first. The switch is on your desk.</p>
       {% endif %}
-      {% if agent_ready %}
+      {% if topic_shared and agent_ready %}
         <form method="post" action="/topics/{{ topic.id }}/draft" class="agent-draft">
           <button class="ghost" type="submit">Draft a reply from what you can already read</button>
         </form>
         <p class="panel-note">The draft stays on your desk. What you can already read here — including {{ other }}'s opened pages — is sent to the model you both allowed. Their private pages never are.</p>
-      {% elif agent_configured %}
+      {% elif topic_shared and agent_configured %}
         <p class="panel-note">Drafting help is off until <a href="/#drafting">both of you allow it</a> from the desk.</p>
       {% endif %}
       <form method="post" action="/topics/{{ topic.id }}/writings">

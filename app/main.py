@@ -93,7 +93,13 @@ class SameOriginMiddleware:
         if origin is None:
             return False
         host = headers.get("host", "")
-        return origin == "null" or urlsplit(origin).netloc.lower() != host.lower()
+        origin_url = urlsplit(origin)
+        scheme = {"ws": "http", "wss": "https"}.get(scope.get("scheme", ""), scope.get("scheme", ""))
+        return (
+            origin == "null"
+            or origin_url.scheme.lower() != scheme.lower()
+            or origin_url.netloc.lower() != host.lower()
+        )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http" and scope.get("method") in UNSAFE_METHODS and self._foreign(scope):
@@ -402,6 +408,7 @@ def home(request: Request, db: Session = Depends(get_db)):
         "home.html",
         db=db,
         desk=desk,
+        prompt_access={t.id: access.topic_prompt_open(user, t) for t in desk},
         incoming=incoming,
         table_count=len(view.cards),
         latest=view.lately[0] if view.lately else None,
@@ -466,6 +473,7 @@ def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)):
         "topic.html",
         db=db,
         topic=topic,
+        topic_prompt=topic.prompt if access.topic_prompt_open(user, topic) else "",
         writings=visible_writings,
         comments_by_writing=comments_by_writing,
         topic_shared=topic.share_status == "shared",
@@ -965,7 +973,14 @@ def _open_topics(db: Session, user: str) -> list[Topic]:
 def archive(request: Request, db: Session = Depends(get_db)):
     user = require_user(request)
     topics = _open_topics(db, user)
-    return render(request, "archive.html", db=db, topics=topics, viewer=user)
+    return render(
+        request,
+        "archive.html",
+        db=db,
+        topics=topics,
+        viewer=user,
+        prompt_access={t.id: access.topic_prompt_open(user, t) for t in topics},
+    )
 
 
 @app.get("/export.json")
@@ -978,7 +993,7 @@ def export_json(request: Request, db: Session = Depends(get_db)):
             {
                 "id": t.id,
                 "title": t.title,
-                "prompt": t.prompt,
+                "prompt": t.prompt if access.topic_prompt_open(user, t) else "",
                 "created_by": t.created_by,
                 "share_status": t.share_status,
                 "created_at": t.created_at.isoformat() if t.created_at else None,
@@ -1035,7 +1050,7 @@ def export_md(request: Request, db: Session = Depends(get_db)):
     lines = [f"# {APP_NAME} archive", "", f"_Exported {fmt_dt(utcnow())}_", ""]
     for t in topics:
         lines += [f"## {t.title}", ""]
-        if t.prompt:
+        if access.topic_prompt_open(user, t) and t.prompt:
             lines += [f"> {t.prompt}", ""]
         for w in t.writings:
             if not access.writing_open(user, w):
@@ -1073,7 +1088,7 @@ def export_md(request: Request, db: Session = Depends(get_db)):
 async def draft_reply(request: Request, topic_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
     topic = _load_topic(db, topic_id)
-    if not topic or not access.topic_open(user, topic):
+    if not topic or topic.share_status != "shared" or not access.topic_open(user, topic):
         return RedirectResponse("/", status_code=303)
     if not agent.allowed(db):
         return RedirectResponse(f"/topics/{topic_id}?agent=consent#write", status_code=303)
@@ -1120,8 +1135,16 @@ async def topic_chat(websocket: WebSocket, topic_id: int):
         seated = await hub.join(topic_id, websocket, user)
         if not seated:
             return
+        db.expire_all()
+        topic = db.get(Topic, topic_id)
+        if not topic or topic.share_status != "shared" or not access.topic_open(user, topic):
+            await websocket.close(code=4404)
+            return
         while True:
             data = await websocket.receive_json()
+            seat = hub.seat(topic_id, websocket)
+            if seat is None or not seat.allow_frame():
+                continue
             if not isinstance(data, dict):
                 continue
             db.expire_all()
@@ -1136,9 +1159,6 @@ async def topic_chat(websocket: WebSocket, topic_id: int):
                 continue
             body = str(data.get("body", "")).strip()
             if kind != "chat" or not body:
-                continue
-            seat = hub.seat(topic_id, websocket)
-            if seat is None or not seat.allow_message():
                 continue
             hub.set_typing(topic_id, websocket, False)
             msg = ChatMessage(topic_id=topic_id, author=user, body=body[:4000])

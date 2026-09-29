@@ -35,7 +35,7 @@
           {% for t in desk %}
             <a class="topic-row" href="/topics/{{ t.id }}">
               <h3>{{ t.title }}</h3>
-              {% if t.share_status == 'private' and t.prompt %}<p class="prompt">{{ t.prompt }}</p>{% endif %}
+              {% if t.share_status == 'private' and prompt_access.get(t.id) and t.prompt %}<p class="prompt">{{ t.prompt }}</p>{% endif %}
               <div class="counts">
                 <span class="badge {{ t.share_status }}">{{ t.share_status|share_label }}</span>
                 {% if t.created_by != user %}<span>begun by {{ display_for(t.created_by) }} · your pages only</span>{% endif %}

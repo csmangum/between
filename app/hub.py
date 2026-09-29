@@ -21,7 +21,7 @@ class Seat:
         self.typing = False
         self.recent: deque[float] = deque()
 
-    def allow_message(self) -> bool:
+    def allow_frame(self) -> bool:
         now = time.monotonic()
         while self.recent and now - self.recent[0] > FLOOD_WINDOW_SECONDS:
             self.recent.popleft()
