@@ -477,6 +477,10 @@ def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)):
         writings=visible_writings,
         comments_by_writing=comments_by_writing,
         topic_shared=topic.share_status == "shared",
+        topic_editable=access.topic_editable(user, topic),
+        topic_removable=access.topic_editable(user, topic) and not access.has_words_from_others(topic, user),
+        removable_writings={w.id for w in visible_writings if access.writing_removable(user, w)},
+        removable_comments={c.id for c in topic.comments if access.comment_removable(user, c)},
         awaiting=awaiting,
         agent_configured=agent.configured(),
         agent_ready=agent.allowed(db),
@@ -624,6 +628,31 @@ async def revoke_topic(request: Request, topic_id: int, db: Session = Depends(ge
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
+@app.post("/topics/{topic_id}/edit")
+def edit_topic(
+    request: Request,
+    topic_id: int,
+    title: str = Form(...),
+    prompt: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = require_user(request)
+    topic = db.get(Topic, topic_id)
+    if not topic or not access.topic_editable(user, topic):
+        return RedirectResponse(f"/topics/{topic_id}", status_code=303)
+    cleaned = title.strip()
+    if not cleaned:
+        flash(request, "A topic needs a title. The old one stays.", "warn")
+        return RedirectResponse(f"/topics/{topic_id}", status_code=303)
+    topic.title = cleaned
+    topic.prompt = prompt.strip()
+    topic.updated_at = utcnow()
+    db.commit()
+    store.write_local(topic)
+    flash(request, "Topic updated on your desk.")
+    return RedirectResponse(f"/topics/{topic_id}", status_code=303)
+
+
 @app.post("/topics/{topic_id}/delete")
 def delete_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
@@ -742,6 +771,35 @@ def edit_writing(
     store.write_local(writing.topic, writing)
     flash(request, "Writing updated on your desk.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
+
+
+@app.post("/writings/{writing_id}/delete")
+def delete_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    writing = db.get(Writing, writing_id)
+    if not writing:
+        return RedirectResponse("/", status_code=303)
+    topic = writing.topic
+    anchor = f"/topics/{topic.id}#writing-{writing_id}"
+    if writing.author != user:
+        return RedirectResponse(f"/topics/{topic.id}", status_code=303)
+    if writing.share_status != "private" or writing.revision_status:
+        flash(request, "Pull it back to your desk before removing it.", "warn")
+        return RedirectResponse(anchor, status_code=303)
+    if not access.writing_removable(user, writing):
+        flash(request, "Their notes hang on this writing, so it stays. Only what you wrote is yours to remove.", "warn")
+        return RedirectResponse(anchor, status_code=303)
+    own_notes = [c for c in topic.comments if c.writing_id == writing.id]
+    for c in own_notes:
+        store.delete_comment_file(c)
+        db.delete(c)
+    store.delete_writing_files(writing)
+    db.delete(writing)
+    topic.updated_at = utcnow()
+    db.commit()
+    clear_markdown_cache()
+    flash(request, "Writing removed from your desk.")
+    return RedirectResponse(f"/topics/{topic.id}", status_code=303)
 
 
 def _save_revision(request: Request, writing: Writing, title: str, body: str, db: Session):
@@ -932,6 +990,29 @@ def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_
         store.write_local(comment.topic, comment=comment)
         flash(request, "Comment pulled back.")
     return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
+
+
+@app.post("/comments/{comment_id}/delete")
+def delete_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    comment = db.get(Comment, comment_id)
+    if not comment:
+        return RedirectResponse("/", status_code=303)
+    anchor = _topic_anchor(comment.topic_id, comment.writing_id, "comments")
+    if comment.author != user:
+        return RedirectResponse(anchor, status_code=303)
+    if comment.share_status != "private":
+        flash(request, "Pull the note back before removing it.", "warn")
+        return RedirectResponse(anchor, status_code=303)
+    if not access.comment_removable(user, comment):
+        flash(request, "Their reply hangs on this note, so it stays.", "warn")
+        return RedirectResponse(anchor, status_code=303)
+    store.delete_comment_file(comment)
+    comment.topic.updated_at = utcnow()
+    db.delete(comment)
+    db.commit()
+    flash(request, "Note removed.")
+    return RedirectResponse(anchor, status_code=303)
 
 
 def _shared_topics(db: Session) -> list[Topic]:

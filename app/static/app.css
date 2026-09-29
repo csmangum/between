@@ -907,6 +907,19 @@ code {
   margin-top: 10px;
 }
 .edit-fold .panel-note { margin-top: 10px; }
+.edit-fold > form + form { margin-top: 12px; }
+.topic-edit { max-width: 640px; margin-top: -12px; margin-bottom: 28px; }
+.note-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+button.quiet-danger {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
+}
+button.quiet-danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

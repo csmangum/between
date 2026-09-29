@@ -202,7 +202,8 @@ Creating a topic is labeled “Keep on my desk,” not “Create” or “Publis
 - Badge: private / offered / shared
 - Actions: Offer to *Name* / Pull it back / Make private again
 - Each writing has the same badge and actions
-- Compose box: “Save to my desk”
+- Compose box: “Save to my desk” (Ctrl/⌘+Enter also saves)
+- While private: change the title and opening note; remove the topic, a writing, or a note. Removal asks first, and never touches words the other person wrote — a writing holding their notes stays, as does a topic holding their pages
 - Chat panel locked until the topic is shared
 
 ### Topic page (counterpart, offered topic)

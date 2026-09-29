@@ -1,6 +1,47 @@
 {% extends "base.html" %}
 {% block title %}{{ topic.title }} · {{ app_name }}{% endblock %}
 {% block body %}
+{% macro note(c, sealed_line) %}
+  <div class="comment">
+    <div class="author-chip">
+      {{ display_for(c.author) }} · {{ c.created_at|when_soft }}
+      · <span class="badge {{ c.share_status }}">{{ c.share_status|share_label }}</span>
+    </div>
+    {% if c.author == user or c.share_status == 'shared' %}
+      <div class="body">{{ c.body }}</div>
+      {% if c.author == user and c.share_status in ['offered', 'shared'] %}
+        <form method="post" action="/comments/{{ c.id }}/revoke">
+          <button class="ghost" type="submit">Pull comment back</button>
+        </form>
+      {% endif %}
+    {% else %}
+      <div class="body sealed">{{ sealed_line }}</div>
+      <div class="actions">
+        <form method="post" action="/comments/{{ c.id }}/accept">
+          <button type="submit">Open note</button>
+        </form>
+        <form method="post" action="/comments/{{ c.id }}/decline">
+          <button class="ghost" type="submit">Not yet</button>
+        </form>
+      </div>
+    {% endif %}
+    {% if c.author == user and c.share_status == 'private' %}
+      <div class="note-actions">
+        {% if topic_shared %}
+          <form method="post" action="/comments/{{ c.id }}/offer">
+            <button class="ghost" type="submit">Send this note</button>
+          </form>
+        {% endif %}
+        {% if c.id in removable_comments %}
+          <form method="post" action="/comments/{{ c.id }}/delete" data-confirm="Remove this note? This cannot be undone.">
+            <button class="ghost quiet-danger" type="submit">Remove</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
 <p class="meta"><a href="/">← Desk</a></p>
 <h1 class="page-title">{{ topic.title }}</h1>
 {% if topic_prompt %}<p class="lede">{{ topic_prompt }}</p>{% endif %}
@@ -41,11 +82,32 @@
         <button class="ghost" type="submit">Pull it back</button>
       </form>
     {% else %}
-      <form method="post" action="/topics/{{ topic.id }}/revoke">
+      <form method="post" action="/topics/{{ topic.id }}/revoke"
+            data-confirm="Return this topic to your desk? Everything inside goes back to whoever wrote it, and the margin closes for you both.">
         <button class="ghost" type="submit">Return to my desk</button>
       </form>
     {% endif %}
   </div>
+  {% if topic_editable %}
+    <details class="edit-fold topic-edit">
+      <summary>Change the title or opening note</summary>
+      <form method="post" action="/topics/{{ topic.id }}/edit" class="edit-form">
+        <label for="topic-title">Title</label>
+        <input id="topic-title" name="title" type="text" required maxlength="240" value="{{ topic.title }}" data-desk>
+        <label for="topic-prompt">Opening note</label>
+        <textarea id="topic-prompt" name="prompt" data-desk>{{ topic.prompt }}</textarea>
+        <div class="actions">
+          <button type="submit">Save changes</button>
+        </div>
+      </form>
+      {% if topic_removable %}
+        <form method="post" action="/topics/{{ topic.id }}/delete"
+              data-confirm="Remove “{{ topic.title }}” and everything you wrote in it? This cannot be undone.">
+          <button class="ghost quiet-danger" type="submit">Remove this topic</button>
+        </form>
+      {% endif %}
+    </details>
+  {% endif %}
 {% endif %}
 
 <div class="topic-layout">
@@ -91,7 +153,8 @@
                   <form method="post" action="/writings/{{ w.id }}/revision/offer">
                     <button type="submit">Send this revision to {{ other }}</button>
                   </form>
-                  <form method="post" action="/writings/{{ w.id }}/revision/discard">
+                  <form method="post" action="/writings/{{ w.id }}/revision/discard"
+                        data-confirm="Discard this revision? The writing you both keep stays as it is.">
                     <button class="ghost" type="submit">Discard this revision</button>
                   </form>
                 {% elif w.revision_status == 'offered' %}
@@ -114,6 +177,12 @@
                   <textarea id="edit-body-{{ w.id }}" name="body" required data-desk>{{ w.body }}</textarea>
                   <button type="submit">Save changes</button>
                 </form>
+                {% if w.id in removable_writings %}
+                  <form method="post" action="/writings/{{ w.id }}/delete"
+                        data-confirm="Remove this writing and your notes on it? This cannot be undone.">
+                    <button class="ghost quiet-danger" type="submit">Remove this writing</button>
+                  </form>
+                {% endif %}
               </details>
             {% elif w.share_status == 'shared' and w.revision_status != 'offered' %}
               <details class="edit-fold" {% if w.revision_status == 'private' %}open{% endif %}>
@@ -133,35 +202,7 @@
           <div class="comments">
             {% set notes = comments_by_writing.get(w.id, []) %}
             {% for c in notes %}
-              <div class="comment">
-                <div class="author-chip">
-                  {{ display_for(c.author) }} · {{ c.created_at|when_soft }}
-                  · <span class="badge {{ c.share_status }}">{{ c.share_status|share_label }}</span>
-                </div>
-                {% if c.author == user or c.share_status == 'shared' %}
-                  <div class="body">{{ c.body }}</div>
-                  {% if c.author == user and c.share_status in ['offered', 'shared'] %}
-                    <form method="post" action="/comments/{{ c.id }}/revoke">
-                      <button class="ghost" type="submit">Pull comment back</button>
-                    </form>
-                  {% endif %}
-                {% else %}
-                  <div class="body sealed">A sealed note is waiting. Open it when you are ready.</div>
-                  <div class="actions">
-                    <form method="post" action="/comments/{{ c.id }}/accept">
-                      <button type="submit">Open note</button>
-                    </form>
-                    <form method="post" action="/comments/{{ c.id }}/decline">
-                      <button class="ghost" type="submit">Not yet</button>
-                    </form>
-                  </div>
-                {% endif %}
-                {% if c.author == user and c.share_status == 'private' and topic_shared %}
-                  <form method="post" action="/comments/{{ c.id }}/offer">
-                    <button class="ghost" type="submit">Send this note</button>
-                  </form>
-                {% endif %}
-              </div>
+              {{ note(c, "A sealed note is waiting. Open it when you are ready.") }}
             {% endfor %}
             {% if w.share_status == 'shared' or w.author == user %}
               <form method="post" action="/topics/{{ topic.id }}/comments">
@@ -214,7 +255,10 @@
         <input id="wtitle" name="title" type="text" data-desk placeholder="Optional heading">
         <label for="wbody">Writing</label>
         <textarea id="wbody" name="body" required data-desk placeholder="Take your time. Markdown is fine."></textarea>
-        <button type="submit">Save to my desk</button>
+        <div class="actions">
+          <button type="submit">Save to my desk</button>
+          <span class="chat-hint">Ctrl+Enter or ⌘+Enter saves too.</span>
+        </div>
       </form>
     </section>
 
@@ -222,35 +266,7 @@
       <h2 class="compose-title">Notes on the topic</h2>
       {% set loose = comments_by_writing.get(None, []) %}
       {% for c in loose %}
-        <div class="comment">
-          <div class="author-chip">
-            {{ display_for(c.author) }} · {{ c.created_at|when_soft }}
-            · <span class="badge {{ c.share_status }}">{{ c.share_status|share_label }}</span>
-          </div>
-          {% if c.author == user or c.share_status == 'shared' %}
-            <div class="body">{{ c.body }}</div>
-            {% if c.author == user and c.share_status in ['offered', 'shared'] %}
-              <form method="post" action="/comments/{{ c.id }}/revoke">
-                <button class="ghost" type="submit">Pull comment back</button>
-              </form>
-            {% endif %}
-          {% else %}
-            <div class="body sealed">A sealed note — hidden until you open it.</div>
-            <div class="actions">
-              <form method="post" action="/comments/{{ c.id }}/accept">
-                <button type="submit">Open note</button>
-              </form>
-              <form method="post" action="/comments/{{ c.id }}/decline">
-                <button class="ghost" type="submit">Not yet</button>
-              </form>
-            </div>
-          {% endif %}
-          {% if c.author == user and c.share_status == 'private' and topic_shared %}
-            <form method="post" action="/comments/{{ c.id }}/offer">
-              <button class="ghost" type="submit">Send this note</button>
-            </form>
-          {% endif %}
-        </div>
+        {{ note(c, "A sealed note — hidden until you open it.") }}
       {% endfor %}
       <form method="post" action="/topics/{{ topic.id }}/comments">
         <label for="topic-note">Private note on the topic</label>
