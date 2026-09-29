@@ -111,3 +111,25 @@ def test_missing_json_stays_json(client):
     response = client.get("/not-a-page", headers={"accept": "application/json"})
     assert response.status_code == 404
     assert response.json()["detail"] == "Not Found"
+
+
+def test_markdown_export_keeps_multiline_notes_inside_their_bullet(client):
+    _login(client, "chris", "pass1")
+    created = client.post("/topics", data={"title": "Letters", "prompt": ""}, follow_redirects=False)
+    topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    client.post(f"/topics/{topic_id}/comments", data={"body": "first line\nsecond line"}, follow_redirects=False)
+    export = client.get("/export.md")
+    assert "): first line\n  second line" in export.text
+    disposition = export.headers["content-disposition"]
+    assert 'filename="between-archive-' in disposition and disposition.endswith('.md"')
+
+
+def test_consent_page_title_names_the_room(client):
+    _login(client, "chris", "pass1")
+    created = client.post("/topics", data={"title": "For you", "prompt": ""}, follow_redirects=False)
+    topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
+    client.post(f"/topics/{topic_id}/offer", follow_redirects=False)
+    client.post("/logout", follow_redirects=False)
+    _login(client, "friend", "pass2")
+    page = client.get(f"/topics/{topic_id}")
+    assert "<title>Sealed · For you · Between</title>" in page.text

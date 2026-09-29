@@ -1064,6 +1064,16 @@ def archive(request: Request, db: Session = Depends(get_db)):
     )
 
 
+def _md_item(author: str, when: datetime | None, body: str) -> str:
+    """One list item; later lines are indented so a multi-line note stays inside its bullet."""
+    text = "\n  ".join(body.splitlines())
+    return f"- **{auth.display_for(author)}** ({fmt_dt(when)}): {text}"
+
+
+def _export_filename(ext: str) -> str:
+    return f"between-archive-{utcnow().date().isoformat()}.{ext}"
+
+
 @app.get("/export.json")
 def export_json(request: Request, db: Session = Depends(get_db)):
     user = require_user(request)
@@ -1120,7 +1130,7 @@ def export_json(request: Request, db: Session = Depends(get_db)):
     return Response(
         content=body,
         media_type="application/json",
-        headers={"Content-Disposition": 'attachment; filename="between-archive.json"'},
+        headers={"Content-Disposition": f'attachment; filename="{_export_filename("json")}"'},
     )
 
 
@@ -1142,18 +1152,18 @@ def export_md(request: Request, db: Session = Depends(get_db)):
             if related:
                 lines.append("**Comments**")
                 for c in related:
-                    lines += [f"- **{auth.display_for(c.author)}** ({fmt_dt(c.created_at)}): {c.body}"]
+                    lines.append(_md_item(c.author, c.created_at, c.body))
                 lines.append("")
         loose = [c for c in t.comments if c.writing_id is None and access.comment_open(user, c)]
         if loose:
             lines.append("**Topic comments**")
             for c in loose:
-                lines += [f"- **{auth.display_for(c.author)}** ({fmt_dt(c.created_at)}): {c.body}"]
+                lines.append(_md_item(c.author, c.created_at, c.body))
             lines.append("")
         if t.share_status == "shared" and t.messages:
             lines.append("**Chat**")
             for m in t.messages:
-                lines += [f"- **{auth.display_for(m.author)}** ({fmt_dt(m.created_at)}): {m.body}"]
+                lines.append(_md_item(m.author, m.created_at, m.body))
             lines.append("")
         lines.append("---")
         lines.append("")
@@ -1161,7 +1171,7 @@ def export_md(request: Request, db: Session = Depends(get_db)):
     return Response(
         content=body,
         media_type="text/markdown",
-        headers={"Content-Disposition": 'attachment; filename="between-archive.md"'},
+        headers={"Content-Disposition": f'attachment; filename="{_export_filename("md")}"'},
     )
 
 
