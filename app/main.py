@@ -648,6 +648,7 @@ def edit_topic(
     topic.prompt = prompt.strip()
     topic.updated_at = utcnow()
     db.commit()
+    store.rename_local_topic_mirrors(topic)
     store.write_local(topic)
     flash(request, "Topic updated on your desk.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
@@ -789,10 +790,15 @@ def delete_writing(request: Request, writing_id: int, db: Session = Depends(get_
     if not access.writing_removable(user, writing):
         flash(request, "Their notes hang on this writing, so it stays. Only what you wrote is yours to remove.", "warn")
         return RedirectResponse(anchor, status_code=303)
-    own_notes = [c for c in topic.comments if c.writing_id == writing.id]
+    own_notes = sorted(
+        (c for c in topic.comments if c.writing_id == writing.id),
+        key=lambda c: c.created_at,
+        reverse=True,
+    )
     for c in own_notes:
         store.delete_comment_file(c)
         db.delete(c)
+        db.flush()
     store.delete_writing_files(writing)
     db.delete(writing)
     topic.updated_at = utcnow()
@@ -1005,7 +1011,7 @@ def delete_comment(request: Request, comment_id: int, db: Session = Depends(get_
         flash(request, "Pull the note back before removing it.", "warn")
         return RedirectResponse(anchor, status_code=303)
     if not access.comment_removable(user, comment):
-        flash(request, "Their reply hangs on this note, so it stays.", "warn")
+        flash(request, "A reply hangs on this note, so it stays.", "warn")
         return RedirectResponse(anchor, status_code=303)
     store.delete_comment_file(comment)
     comment.topic.updated_at = utcnow()

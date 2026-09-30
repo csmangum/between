@@ -70,6 +70,22 @@ def test_private_topic_can_be_retitled_and_its_mirror_follows(client: TestClient
     assert "Topic updated" in client.get(f"/topics/{topic_id}").text
 
 
+def test_retitling_renames_every_local_mirror(db_session: Session):
+    a, b = _pair()
+    topic_id = _shared_topic(a, b)
+    wid = _writing(a, topic_id, "inside")
+    a.post(f"/writings/{wid}/offer", follow_redirects=False)
+    b.post(f"/writings/{wid}/accept", follow_redirects=False)
+    _note(b, topic_id, "their note")
+    a.post(f"/topics/{topic_id}/revoke", follow_redirects=False)
+
+    a.post(f"/topics/{topic_id}/edit", data={"title": "New name", "prompt": ""}, follow_redirects=False)
+
+    for user in ("chris", "friend"):
+        assert (data_root() / "local" / user / f"{topic_id:04d}-new-name").is_dir()
+        assert not (data_root() / "local" / user / f"{topic_id:04d}-letters").exists()
+
+
 def test_blank_title_keeps_the_old_one(client: TestClient, db_session: Session):
     _login(client, "chris", "pass1")
     topic_id = _topic(client, title="Keep me")
@@ -134,6 +150,26 @@ def test_private_writing_and_its_own_notes_can_be_removed(client: TestClient, db
     assert "Writing removed" in page
 
 
+def test_private_writing_deletes_note_replies_before_parents(client: TestClient, db_session: Session):
+    _login(client, "chris", "pass1")
+    topic_id = _topic(client)
+    wid = _writing(client, topic_id, "a page to lose")
+    _note(client, topic_id, "parent", wid)
+    parent_id = db_session.query(Comment).one().id
+    client.post(
+        f"/topics/{topic_id}/comments",
+        data={"body": "reply", "parent_id": str(parent_id), "writing_id": str(wid)},
+        follow_redirects=False,
+    )
+
+    response = client.post(f"/writings/{wid}/delete", follow_redirects=False)
+
+    assert response.status_code == 303
+    db_session.expire_all()
+    assert db_session.get(Writing, wid) is None
+    assert db_session.query(Comment).filter(Comment.writing_id == wid).count() == 0
+
+
 def test_sent_writing_must_be_pulled_back_before_removal(db_session: Session):
     a, b = _pair()
     topic_id = _shared_topic(a, b)
@@ -168,6 +204,25 @@ def test_writing_holding_their_notes_stays(db_session: Session):
     db_session.expire_all()
     assert db_session.get(Writing, wid) is not None
     assert db_session.query(Comment).filter(Comment.author == "friend").count() == 1
+
+
+def test_writing_with_offered_note_stays_after_revoke(db_session: Session):
+    a, b = _pair()
+    topic_id = _shared_topic(a, b)
+    wid = _writing(a, topic_id, "read together")
+    a.post(f"/writings/{wid}/offer", follow_redirects=False)
+    b.post(f"/writings/{wid}/accept", follow_redirects=False)
+    _note(a, topic_id, "sent note", wid)
+    cid = db_session.query(Comment).one().id
+    a.post(f"/comments/{cid}/offer", follow_redirects=False)
+    b.post(f"/comments/{cid}/accept", follow_redirects=False)
+    a.post(f"/writings/{wid}/revoke", follow_redirects=False)
+
+    response = a.post(f"/writings/{wid}/delete", follow_redirects=False)
+
+    assert response.headers["location"] == f"/topics/{topic_id}#writing-{wid}"
+    assert db_session.get(Writing, wid) is not None
+    assert "notes hang on this writing" in a.get(f"/topics/{topic_id}").text
 
 
 # --- removing a private note ---------------------------------------------------
@@ -206,6 +261,7 @@ def test_private_note_with_own_reply_cannot_be_removed(client: TestClient, db_se
     db_session.expire_all()
     assert db_session.get(Comment, parent_id) is not None
     assert db_session.query(Comment).count() == 2
+    assert "A reply hangs on this note, so it stays." in client.get(f"/topics/{topic_id}").text
 
 
 def test_shared_note_and_their_note_cannot_be_removed(db_session: Session):

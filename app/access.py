@@ -104,7 +104,10 @@ def writing_removable(user: str, writing: Writing) -> bool:
     """Only the author, only from the desk, and never while someone else's notes hang on it."""
     if writing.author != user or writing.share_status != "private" or writing.revision_status:
         return False
-    return not any(c.writing_id == writing.id and c.author != user for c in writing.topic.comments)
+    return not any(
+        c.writing_id == writing.id and (c.author != user or c.share_status != "private")
+        for c in writing.topic.comments
+    )
 
 
 def comment_removable(user: str, comment: Comment) -> bool:

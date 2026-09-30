@@ -41,6 +41,18 @@ def _existing_topic_dirs(base: Path, topic_id: int) -> list[Path]:
     return sorted(p for p in base.glob(f"{topic_id:04d}-*") if p.is_dir())
 
 
+def rename_local_topic_mirrors(topic: Topic) -> None:
+    local_root = data_root() / "local"
+    if not local_root.exists():
+        return
+    folder_name = f"{topic.id:04d}-{_slug(topic.title)}"
+    for user_root in (p for p in local_root.iterdir() if p.is_dir()):
+        existing = _existing_topic_dirs(user_root, topic.id)
+        folder = user_root / folder_name
+        if existing and folder not in existing:
+            existing[0].rename(folder)
+
+
 def _stable_writing_path(folder: Path, writing: Writing) -> Path:
     for legacy in folder.glob(f"writing-{writing.id}-*.md"):
         legacy.unlink(missing_ok=True)
