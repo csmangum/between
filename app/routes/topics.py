@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
@@ -24,7 +24,7 @@ def create_topic(
     title: str = Form(...),
     prompt: str = Form(""),
     db: Session = Depends(get_db),
-):
+) -> Response:
     user = require_user(request)
     cleaned = title.strip()
     if not cleaned:
@@ -39,7 +39,7 @@ def create_topic(
 
 
 @router.get("/topics/{topic_id}", response_class=HTMLResponse)
-def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)):
+def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topic = load_topic(db, topic_id)
     if not topic or not access.topic_visible(user, topic):
@@ -74,7 +74,7 @@ def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/topics/{topic_id}/offer")
-def offer_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
+def offer_topic(request: Request, topic_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topic = db.get(Topic, topic_id)
     if topic and topic.created_by == user and topic.share_status == "private":
@@ -87,7 +87,7 @@ def offer_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/topics/{topic_id}/accept")
-def accept_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
+def accept_topic(request: Request, topic_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topic = db.get(Topic, topic_id)
     if topic and topic.created_by != user and topic.share_status == "offered":
@@ -117,7 +117,7 @@ async def _close_topic(db: Session, topic: Topic) -> None:
 
 
 @router.post("/topics/{topic_id}/decline")
-async def decline_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
+async def decline_topic(request: Request, topic_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topic = load_topic(db, topic_id)
     if topic and topic.created_by != user and topic.share_status == "offered":
@@ -128,7 +128,7 @@ async def decline_topic(request: Request, topic_id: int, db: Session = Depends(g
 
 
 @router.post("/topics/{topic_id}/revoke")
-async def revoke_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
+async def revoke_topic(request: Request, topic_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topic = load_topic(db, topic_id)
     if topic and topic.created_by == user and topic.share_status in {"offered", "shared"}:
@@ -144,7 +144,7 @@ def edit_topic(
     title: str = Form(...),
     prompt: str = Form(""),
     db: Session = Depends(get_db),
-):
+) -> Response:
     user = require_user(request)
     topic = db.get(Topic, topic_id)
     if not topic or not access.topic_editable(user, topic):
@@ -164,7 +164,7 @@ def edit_topic(
 
 
 @router.post("/topics/{topic_id}/delete")
-def delete_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
+def delete_topic(request: Request, topic_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topic = load_topic(db, topic_id)
     if not topic or topic.created_by != user or topic.share_status != "private":
@@ -181,7 +181,7 @@ def delete_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
 
 
 @router.post("/topics/{topic_id}/draft")
-async def draft_reply(request: Request, topic_id: int, db: Session = Depends(get_db)):
+async def draft_reply(request: Request, topic_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topic = load_topic(db, topic_id)
     if not topic or topic.share_status != "shared" or not access.topic_open(user, topic):

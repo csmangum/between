@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
-from app.queries import attach_topic_counts
 from app.markdown_render import render_markdown
 from app.models import Comment, Topic, Writing
+from app.queries import writing_counts
 from app.store import data_root
 from app.table import excerpt
 
@@ -74,12 +74,12 @@ def test_home_avoids_n_plus_one(client, db_session: Session):
         queries.append(statement)
 
     try:
-        attach_topic_counts(db_session, topics, "chris")
+        counts = writing_counts(db_session, topics, "chris")
     finally:
         event.remove(db_session.bind, "before_cursor_execute", _count)
     count_queries = [q for q in queries if "count(" in q.lower() or "count (" in q.lower()]
     assert len(count_queries) <= 2
-    assert topics[0].writing_count == 1
+    assert counts[topics[0].id] == 1
     home = client.get("/")
     assert home.status_code == 200
     assert "T0" in home.text
@@ -90,7 +90,9 @@ def test_shared_counts_hide_private_drafts(client, db_session: Session):
     db_session.add(topic)
     db_session.flush()
     db_session.add(Writing(topic_id=topic.id, author="chris", title="draft", body="private", share_status="private"))
-    db_session.add(Writing(topic_id=topic.id, author="chris", title="open", body="shared-body-unique", share_status="shared"))
+    db_session.add(
+        Writing(topic_id=topic.id, author="chris", title="open", body="shared-body-unique", share_status="shared")
+    )
     db_session.commit()
 
     _login(client, "friend", "pass2")
@@ -115,7 +117,7 @@ def test_excerpt_trims_to_words():
 
 
 def test_table_shows_shared_hides_private_and_sealed_bodies(client, db_session: Session):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     topic = Topic(
         title="Letters",
         prompt="the opening note",

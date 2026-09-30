@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -18,14 +19,12 @@ router = APIRouter()
 
 
 async def _close_quietly(websocket: WebSocket, code: int) -> None:
-    try:
+    with contextlib.suppress(Exception):
         await websocket.close(code=code)
-    except Exception:
-        pass
 
 
 @router.websocket("/ws/topics/{topic_id}")
-async def topic_chat(websocket: WebSocket, topic_id: int):
+async def topic_chat(websocket: WebSocket, topic_id: int) -> None:
     user = auth.session_user(websocket.scope.get("session", {}))
     if not user:
         await websocket.close(code=4401)

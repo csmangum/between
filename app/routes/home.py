@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from .. import access, agent
 from ..db import get_db
-from ..queries import shared_topics, visible_topics
+from ..queries import shared_topics, visible_topics, writing_counts
 from ..table import build_table
 from ..views import flash, other_display, render, require_user
 
@@ -14,7 +14,7 @@ router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-def home(request: Request, db: Session = Depends(get_db)):
+def home(request: Request, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topics = visible_topics(db, user)
     incoming = [t for t in topics if access.topic_awaits(user, t)]
@@ -26,6 +26,7 @@ def home(request: Request, db: Session = Depends(get_db)):
         "home.html",
         db=db,
         desk=desk,
+        writing_counts=writing_counts(db, desk, user),
         prompt_access={t.id: access.topic_prompt_open(user, t) for t in desk},
         incoming=incoming,
         table_count=len(view.cards),
@@ -39,7 +40,7 @@ def home(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post("/me/agent")
-def set_agent_consent(request: Request, allow: str = Form(""), db: Session = Depends(get_db)):
+def set_agent_consent(request: Request, allow: str = Form(""), db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     granted = allow.strip().lower() in {"1", "true", "yes", "on"}
     agent.set_consent(db, user, granted)

@@ -64,11 +64,10 @@ class SameOriginMiddleware:
             return False
         host = headers.get("host", "")
         origin_url = urlsplit(origin)
-        scheme = {"ws": "http", "wss": "https"}.get(scope.get("scheme", ""), scope.get("scheme", ""))
+        raw_scheme: str = scope.get("scheme") or ""
+        scheme = {"ws": "http", "wss": "https"}.get(raw_scheme, raw_scheme)
         return (
-            origin == "null"
-            or origin_url.scheme.lower() != scheme.lower()
-            or origin_url.netloc.lower() != host.lower()
+            origin == "null" or origin_url.scheme.lower() != scheme.lower() or origin_url.netloc.lower() != host.lower()
         )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from .. import access, share, store
@@ -24,7 +24,7 @@ def add_writing(
     title: str = Form(""),
     body: str = Form(...),
     db: Session = Depends(get_db),
-):
+) -> Response:
     user = require_user(request)
     topic = db.get(Topic, topic_id)
     if not topic or not access.topic_open(user, topic):
@@ -48,7 +48,7 @@ def add_writing(
 
 
 @router.post("/writings/{writing_id}/offer")
-def offer_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
+def offer_writing(request: Request, writing_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing:
@@ -66,7 +66,7 @@ def offer_writing(request: Request, writing_id: int, db: Session = Depends(get_d
 
 
 @router.post("/writings/{writing_id}/accept")
-def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
+def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing:
@@ -83,7 +83,7 @@ def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_
 
 
 @router.post("/writings/{writing_id}/decline")
-def decline_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
+def decline_writing(request: Request, writing_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing:
@@ -101,7 +101,7 @@ def decline_writing(request: Request, writing_id: int, db: Session = Depends(get
 
 
 @router.post("/writings/{writing_id}/revoke")
-def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
+def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing:
@@ -126,7 +126,7 @@ def edit_writing(
     title: str = Form(""),
     body: str = Form(...),
     db: Session = Depends(get_db),
-):
+) -> Response:
     """Authors may revise private writings without a new accept cycle."""
     user = require_user(request)
     writing = db.get(Writing, writing_id)
@@ -150,7 +150,7 @@ def edit_writing(
 
 
 @router.post("/writings/{writing_id}/delete")
-def delete_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
+def delete_writing(request: Request, writing_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing:
@@ -206,7 +206,7 @@ def save_writing_revision(
     title: str = Form(""),
     body: str = Form(...),
     db: Session = Depends(get_db),
-):
+) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing or writing.author != user or writing.share_status != "shared":
@@ -215,7 +215,7 @@ def save_writing_revision(
 
 
 @router.post("/writings/{writing_id}/revision/offer")
-def offer_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
+def offer_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing:
@@ -238,7 +238,7 @@ def offer_writing_revision(request: Request, writing_id: int, db: Session = Depe
 
 
 @router.post("/writings/{writing_id}/revision/accept")
-def accept_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
+def accept_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing:
@@ -261,7 +261,7 @@ def accept_writing_revision(request: Request, writing_id: int, db: Session = Dep
 
 
 @router.post("/writings/{writing_id}/revision/decline")
-def decline_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
+def decline_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing:
@@ -276,7 +276,7 @@ def decline_writing_revision(request: Request, writing_id: int, db: Session = De
 
 
 @router.post("/writings/{writing_id}/revision/revoke")
-def revoke_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
+def revoke_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing:
@@ -291,7 +291,7 @@ def revoke_writing_revision(request: Request, writing_id: int, db: Session = Dep
 
 
 @router.post("/writings/{writing_id}/revision/discard")
-def discard_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)):
+def discard_writing_revision(request: Request, writing_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     writing = db.get(Writing, writing_id)
     if not writing:

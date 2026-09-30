@@ -105,8 +105,7 @@ def writing_removable(user: str, writing: Writing) -> bool:
     if writing.author != user or writing.share_status != "private" or writing.revision_status:
         return False
     return not any(
-        c.writing_id == writing.id and (c.author != user or c.share_status != "private")
-        for c in writing.topic.comments
+        c.writing_id == writing.id and (c.author != user or c.share_status != "private") for c in writing.topic.comments
     )
 
 

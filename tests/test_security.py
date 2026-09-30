@@ -89,7 +89,9 @@ def test_no_inline_script_on_topic_page(client: TestClient):
 
 def test_cross_site_post_is_refused(client: TestClient):
     _login(client, "chris", "pass1")
-    foreign = client.post("/topics", data={"title": "x"}, headers={"origin": "https://evil.example"}, follow_redirects=False)
+    foreign = client.post(
+        "/topics", data={"title": "x"}, headers={"origin": "https://evil.example"}, follow_redirects=False
+    )
     assert foreign.status_code == 403
     null_origin = client.post("/topics", data={"title": "x"}, headers={"origin": "null"}, follow_redirects=False)
     assert null_origin.status_code == 403
@@ -104,20 +106,22 @@ def test_cross_site_post_is_refused(client: TestClient):
 def test_cross_site_websocket_is_refused():
     a, b = _pair()
     topic_id = _shared_topic(a, b)
-    with pytest.raises(WebSocketDisconnect) as exc:
-        with a.websocket_connect(f"/ws/topics/{topic_id}", headers={"origin": "https://evil.example"}) as ws:
-            ws.receive_json()
+    with (
+        pytest.raises(WebSocketDisconnect) as exc,
+        a.websocket_connect(f"/ws/topics/{topic_id}", headers={"origin": "https://evil.example"}) as ws,
+    ):
+        ws.receive_json()
     assert exc.value.code == 4403
 
 
 def test_websocket_origin_must_match_request_scheme():
     a, b = _pair()
     topic_id = _shared_topic(a, b)
-    with pytest.raises(WebSocketDisconnect) as exc:
-        with a.websocket_connect(
-            f"/ws/topics/{topic_id}", headers={"origin": "https://testserver"}
-        ) as ws:
-            ws.receive_json()
+    with (
+        pytest.raises(WebSocketDisconnect) as exc,
+        a.websocket_connect(f"/ws/topics/{topic_id}", headers={"origin": "https://testserver"}) as ws,
+    ):
+        ws.receive_json()
     assert exc.value.code == 4403
 
 
@@ -303,11 +307,11 @@ def test_comment_parent_must_exist_in_the_same_thread(db_session: Session):
 def test_websocket_seat_is_released_on_bad_frames():
     a, b = _pair()
     topic_id = _shared_topic(a, b)
-    with pytest.raises(Exception):
-        with a.websocket_connect(f"/ws/topics/{topic_id}") as ws:
-            ws.receive_json()
-            ws.send_text("not json")
-            ws.receive_json()
+    with pytest.raises(WebSocketDisconnect) as exc, a.websocket_connect(f"/ws/topics/{topic_id}") as ws:
+        ws.receive_json()
+        ws.send_text("not json")
+        ws.receive_json()
+    assert exc.value.code == 1003
     assert hub.rooms.get(topic_id) in (None, {})
 
 
@@ -333,9 +337,8 @@ def test_websocket_seat_limit():
             ws.__enter__()
             ws.receive_json()
             open_sockets.append(ws)
-        with pytest.raises(WebSocketDisconnect) as exc:
-            with a.websocket_connect(f"/ws/topics/{topic_id}") as extra:
-                extra.receive_json()
+        with pytest.raises(WebSocketDisconnect) as exc, a.websocket_connect(f"/ws/topics/{topic_id}") as extra:
+            extra.receive_json()
         assert exc.value.code == 4429
     finally:
         for ws in open_sockets:
@@ -459,9 +462,7 @@ def test_drafting_excerpt_contains_only_shared_content():
 def test_drafting_control_is_hidden_for_private_topics(client: TestClient, monkeypatch):
     monkeypatch.setenv("AGENT_API_KEY", "test-key")
     _login(client, "chris", "pass1")
-    created = client.post(
-        "/topics", data={"title": "Private", "prompt": ""}, follow_redirects=False
-    )
+    created = client.post("/topics", data={"title": "Private", "prompt": ""}, follow_redirects=False)
     topic_id = int(created.headers["location"].rsplit("/", 1)[-1])
     page = client.get(f"/topics/{topic_id}").text
     assert "Draft a reply" not in page
@@ -474,7 +475,7 @@ def test_drafting_control_is_hidden_for_private_topics(client: TestClient, monke
 def test_author_supplied_rel_is_replaced():
     html = render_markdown('<a href="https://e.com" rel="opener" onclick="x()">y</a>')
     assert 'rel="noopener noreferrer"' in html
-    assert "opener\"" not in html.replace('rel="noopener noreferrer"', "")
+    assert 'opener"' not in html.replace('rel="noopener noreferrer"', "")
     assert "onclick" not in html
 
 

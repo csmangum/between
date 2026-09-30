@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from .. import auth
 from ..throttle import login_throttle
@@ -15,14 +15,14 @@ router = APIRouter()
 
 
 @router.get("/login", response_class=HTMLResponse)
-def login_page(request: Request):
+def login_page(request: Request) -> Response:
     if current_user(request):
         return RedirectResponse("/", status_code=303)
     return render(request, "login.html")
 
 
 @router.post("/login")
-def login(request: Request, username: str = Form(...), password: str = Form(...)):
+def login(request: Request, username: str = Form(...), password: str = Form(...)) -> Response:
     ip = client_ip(request)
     name = username.strip().lower()[:80]
     keys = [f"ip:{ip}", f"user:{name}"]
@@ -56,6 +56,6 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
 
 
 @router.post("/logout")
-def logout(request: Request):
+def logout(request: Request) -> Response:
     request.session.clear()
     return RedirectResponse("/login", status_code=303)

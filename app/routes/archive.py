@@ -20,14 +20,14 @@ router = APIRouter()
 
 
 @router.get("/table", response_class=HTMLResponse)
-def table_page(request: Request, db: Session = Depends(get_db)):
+def table_page(request: Request, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     view = build_table(shared_topics(db), user)
     return render(request, "table.html", db=db, lately=view.lately, cards=view.cards)
 
 
 @router.get("/archive", response_class=HTMLResponse)
-def archive(request: Request, db: Session = Depends(get_db)):
+def archive(request: Request, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topics = open_topics(db, user)
     return render(
@@ -51,7 +51,7 @@ def _export_filename(ext: str) -> str:
 
 
 @router.get("/export.json")
-def export_json(request: Request, db: Session = Depends(get_db)):
+def export_json(request: Request, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topics = open_topics(db, user)
     payload = []
@@ -111,7 +111,7 @@ def export_json(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/export.md")
-def export_md(request: Request, db: Session = Depends(get_db)):
+def export_md(request: Request, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topics = open_topics(db, user)
     lines = [f"# {APP_NAME} archive", "", f"_Exported {fmt_dt(utcnow())}_", ""]

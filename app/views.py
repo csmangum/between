@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -36,7 +36,7 @@ def fmt_dt(value: datetime | None) -> str:
     if not value:
         return ""
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
+        value = value.replace(tzinfo=UTC)
     return value.astimezone().strftime("%b %d, %Y · %H:%M")
 
 
@@ -45,9 +45,9 @@ def fmt_dt_soft(value: datetime | None) -> str:
     if not value:
         return ""
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
+        value = value.replace(tzinfo=UTC)
     local = value.astimezone()
-    now = datetime.now(timezone.utc).astimezone()
+    now = datetime.now(UTC).astimezone()
     seconds = int((now - local).total_seconds())
     if seconds < 45:
         return "just now"

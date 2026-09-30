@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from . import access
 from .db import SessionLocal
-from .models import ChatMessage, Topic, Writing
+from .models import Topic, Writing
 
 
 def sealed_offer_count(user: str | None, db: Session | None = None) -> int:
@@ -16,39 +16,26 @@ def sealed_offer_count(user: str | None, db: Session | None = None) -> int:
     own = db is not None
     session = db or SessionLocal()
     try:
-        return (
-            session.query(Topic)
-            .filter(Topic.created_by != user, Topic.share_status == "offered")
-            .count()
-        )
+        return session.query(Topic).filter(Topic.created_by != user, Topic.share_status == "offered").count()
     finally:
         if not own:
             session.close()
 
 
-def attach_topic_counts(db: Session, topics: list[Topic], viewer: str) -> None:
-    """Batch-load writing/message counts to avoid N+1 on the desk."""
+def writing_counts(db: Session, topics: list[Topic], viewer: str) -> dict[int, int]:
+    """Writings this person may know about, per topic, in one query so the desk avoids N+1."""
     if not topics:
-        return
-    ids = [t.id for t in topics]
-    writing_counts = dict(
+        return {}
+    rows = (
         db.query(Writing.topic_id, func.count(Writing.id))
         .filter(
-            Writing.topic_id.in_(ids),
+            Writing.topic_id.in_([t.id for t in topics]),
             or_(Writing.author == viewer, Writing.share_status.in_(("offered", "shared"))),
         )
         .group_by(Writing.topic_id)
         .all()
     )
-    message_counts = dict(
-        db.query(ChatMessage.topic_id, func.count(ChatMessage.id))
-        .filter(ChatMessage.topic_id.in_(ids))
-        .group_by(ChatMessage.topic_id)
-        .all()
-    )
-    for topic in topics:
-        topic.writing_count = writing_counts.get(topic.id, 0)
-        topic.message_count = message_counts.get(topic.id, 0)
+    return {topic_id: count for topic_id, count in rows}
 
 
 def load_topic(db: Session, topic_id: int) -> Topic | None:
@@ -67,9 +54,7 @@ def load_topic(db: Session, topic_id: int) -> Topic | None:
 def visible_topics(db: Session, user: str) -> list[Topic]:
     topics = db.query(Topic).order_by(Topic.updated_at.desc()).all()
     mine = access.contributed_topic_ids(db, user)
-    visible = [t for t in topics if access.topic_visible(user, t, contributor=t.id in mine)]
-    attach_topic_counts(db, visible, user)
-    return visible
+    return [t for t in topics if access.topic_visible(user, t, contributor=t.id in mine)]
 
 
 def shared_topics(db: Session) -> list[Topic]:

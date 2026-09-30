@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from .. import access, share, store
@@ -25,7 +25,7 @@ def add_comment(
     writing_id: int | None = Form(None),
     parent_id: int | None = Form(None),
     db: Session = Depends(get_db),
-):
+) -> Response:
     user = require_user(request)
     topic = db.get(Topic, topic_id)
     if not topic or not access.topic_open(user, topic):
@@ -63,7 +63,7 @@ def add_comment(
 
 
 @router.post("/comments/{comment_id}/offer")
-def offer_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
+def offer_comment(request: Request, comment_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     comment = db.get(Comment, comment_id)
     if not comment:
@@ -77,7 +77,7 @@ def offer_comment(request: Request, comment_id: int, db: Session = Depends(get_d
 
 
 @router.post("/comments/{comment_id}/accept")
-def accept_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
+def accept_comment(request: Request, comment_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     comment = db.get(Comment, comment_id)
     if not comment:
@@ -94,7 +94,7 @@ def accept_comment(request: Request, comment_id: int, db: Session = Depends(get_
 
 
 @router.post("/comments/{comment_id}/decline")
-def decline_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
+def decline_comment(request: Request, comment_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     comment = db.get(Comment, comment_id)
     if not comment:
@@ -112,7 +112,7 @@ def decline_comment(request: Request, comment_id: int, db: Session = Depends(get
 
 
 @router.post("/comments/{comment_id}/revoke")
-def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
+def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     comment = db.get(Comment, comment_id)
     if not comment:
@@ -128,7 +128,7 @@ def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_
 
 
 @router.post("/comments/{comment_id}/delete")
-def delete_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
+def delete_comment(request: Request, comment_id: int, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     comment = db.get(Comment, comment_id)
     if not comment:

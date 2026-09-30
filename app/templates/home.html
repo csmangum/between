@@ -39,8 +39,8 @@
               <div class="counts">
                 <span class="badge {{ t.share_status }}">{{ t.share_status|share_label }}</span>
                 {% if t.created_by != user %}<span>begun by {{ display_for(t.created_by) }} · your pages only</span>{% endif %}
-                {% if t.writing_count %}
-                  <span>{{ t.writing_count|count_label("writing") }}</span>
+                {% if writing_counts.get(t.id) %}
+                  <span>{{ writing_counts[t.id]|count_label("writing") }}</span>
                 {% else %}
                   <span>no writings yet</span>
                 {% endif %}
