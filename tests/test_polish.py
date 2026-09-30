@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from app.main import count_label, fmt_dt_soft
+from app.views import count_label, fmt_dt_soft
 from app.markdown_render import render_markdown
 
 

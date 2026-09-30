@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
-from app.main import attach_topic_counts
+from app.queries import attach_topic_counts
 from app.markdown_render import render_markdown
 from app.models import Comment, Topic, Writing
 from app.store import data_root
