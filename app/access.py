@@ -95,6 +95,24 @@ def comment_open(user: str, comment: Comment) -> bool:
     return _parent_open(user, comment) and comment.share_status == "shared"
 
 
+def topic_editable(user: str, topic: Topic) -> bool:
+    """Title and opening note change only while the topic is on its creator's desk alone."""
+    return topic.created_by == user and topic.share_status == "private"
+
+
+def writing_removable(user: str, writing: Writing) -> bool:
+    """Only the author, only from the desk, and never while someone else's notes hang on it."""
+    if writing.author != user or writing.share_status != "private" or writing.revision_status:
+        return False
+    return not any(c.writing_id == writing.id and c.author != user for c in writing.topic.comments)
+
+
+def comment_removable(user: str, comment: Comment) -> bool:
+    if comment.author != user or comment.share_status != "private":
+        return False
+    return not any(c.parent_id == comment.id for c in comment.topic.comments)
+
+
 def has_words_from_others(topic: Topic, user: str) -> bool:
     """Anything in this topic that someone other than `user` wrote."""
     for attr in ("writings", "comments", "messages"):

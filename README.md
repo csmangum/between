@@ -13,6 +13,8 @@ Everything starts **private**.
 3. They **open** it. Only then does the body become readable, and a copy is written to `data/shared/`.
 4. You can **pull it back**. Shared access ends, the shared copy is removed from disk, and everything inside the topic returns to the desk of whoever wrote it.
 
+While something is on your desk you can change it or remove it. A private topic's title and opening note can be edited, and a private writing or note can be removed (with confirmation). Anything you have sent has to be pulled back first.
+
 Chat on a topic stays closed until the *topic itself* is sent and opened. The margin is for after agreement.
 
 Your words stay yours. If they pull a topic back that you wrote in, you keep your own pages in it (listed on your desk as *begun by them · your pages only*), and they cannot delete a topic while it holds anything you wrote.
