@@ -110,7 +110,7 @@ def writing_removable(user: str, writing: Writing) -> bool:
 def comment_removable(user: str, comment: Comment) -> bool:
     if comment.author != user or comment.share_status != "private":
         return False
-    return not any(c.parent_id == comment.id and c.author != user for c in comment.topic.comments)
+    return not any(c.parent_id == comment.id for c in comment.topic.comments)
 
 
 def has_words_from_others(topic: Topic, user: str) -> bool:

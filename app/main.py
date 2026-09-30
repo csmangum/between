@@ -1011,6 +1011,7 @@ def delete_comment(request: Request, comment_id: int, db: Session = Depends(get_
     comment.topic.updated_at = utcnow()
     db.delete(comment)
     db.commit()
+    clear_markdown_cache()
     flash(request, "Note removed.")
     return RedirectResponse(anchor, status_code=303)
 

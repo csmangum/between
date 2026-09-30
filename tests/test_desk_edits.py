@@ -189,6 +189,25 @@ def test_private_note_can_be_removed_by_its_author(client: TestClient, db_sessio
     assert not list(local.rglob(f"comment-{cid}.md"))
 
 
+def test_private_note_with_own_reply_cannot_be_removed(client: TestClient, db_session: Session):
+    _login(client, "chris", "pass1")
+    topic_id = _topic(client)
+    _note(client, topic_id, "parent")
+    parent_id = db_session.query(Comment).one().id
+    client.post(
+        f"/topics/{topic_id}/comments",
+        data={"body": "reply", "parent_id": str(parent_id)},
+        follow_redirects=False,
+    )
+
+    response = client.post(f"/comments/{parent_id}/delete", follow_redirects=False)
+
+    assert response.headers["location"] == f"/topics/{topic_id}#comments"
+    db_session.expire_all()
+    assert db_session.get(Comment, parent_id) is not None
+    assert db_session.query(Comment).count() == 2
+
+
 def test_shared_note_and_their_note_cannot_be_removed(db_session: Session):
     a, b = _pair()
     topic_id = _shared_topic(a, b)
