@@ -89,11 +89,17 @@ XAI_API_KEY=xai-...
 # AGENT_MODEL=llama3.2
 ```
 
-## Tests
+## Tests and checks
 
 ```bash
-.venv/bin/pytest -q
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pytest
+.venv/bin/ruff check . && .venv/bin/ruff format --check .
+.venv/bin/mypy
 ```
+
+The same four commands run in CI on every pull request (`.github/workflows/ci.yml`). Configuration lives in `pyproject.toml`.
 
 ## What this is not
 
