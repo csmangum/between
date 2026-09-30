@@ -25,7 +25,12 @@ def _slug(text: str) -> str:
 
 
 def _topic_dir(base: Path, topic: Topic) -> Path:
+    """One folder per topic under `base`, renamed to follow the title so a retitled topic
+    does not leave its earlier pages behind in a second folder."""
     folder = base / f"{topic.id:04d}-{_slug(topic.title)}"
+    existing = _existing_topic_dirs(base, topic.id)
+    if folder not in existing and existing:
+        existing[0].rename(folder)
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
@@ -33,7 +38,19 @@ def _topic_dir(base: Path, topic: Topic) -> Path:
 def _existing_topic_dirs(base: Path, topic_id: int) -> list[Path]:
     if not base.exists():
         return []
-    return [p for p in base.glob(f"{topic_id:04d}-*") if p.is_dir()]
+    return sorted(p for p in base.glob(f"{topic_id:04d}-*") if p.is_dir())
+
+
+def rename_local_topic_mirrors(topic: Topic) -> None:
+    local_root = data_root() / "local"
+    if not local_root.exists():
+        return
+    folder_name = f"{topic.id:04d}-{_slug(topic.title)}"
+    for user_root in (p for p in local_root.iterdir() if p.is_dir()):
+        existing = _existing_topic_dirs(user_root, topic.id)
+        folder = user_root / folder_name
+        if existing and folder not in existing:
+            existing[0].rename(folder)
 
 
 def _stable_writing_path(folder: Path, writing: Writing) -> Path:
@@ -146,6 +163,20 @@ def remove_shared(topic: Topic, writing: Writing | None = None, comment: Comment
             (folder / f"comment-{comment.id}.md").unlink(missing_ok=True)
         else:
             shutil.rmtree(folder, ignore_errors=True)
+
+
+def delete_writing_files(writing: Writing) -> None:
+    """The author's copy, any unopened revision, and a shared copy if one lingered."""
+    for folder in _existing_topic_dirs(data_root() / "local" / writing.author, writing.topic_id):
+        (folder / f"writing-{writing.id}.md").unlink(missing_ok=True)
+        (folder / f"revision-{writing.id}.md").unlink(missing_ok=True)
+    remove_shared(writing.topic, writing)
+
+
+def delete_comment_file(comment: Comment) -> None:
+    for folder in _existing_topic_dirs(data_root() / "local" / comment.author, comment.topic_id):
+        (folder / f"comment-{comment.id}.md").unlink(missing_ok=True)
+    remove_shared(comment.topic, comment=comment)
 
 
 def delete_topic_files(topic: Topic) -> None:

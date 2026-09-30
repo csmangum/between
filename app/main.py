@@ -477,6 +477,10 @@ def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)):
         writings=visible_writings,
         comments_by_writing=comments_by_writing,
         topic_shared=topic.share_status == "shared",
+        topic_editable=access.topic_editable(user, topic),
+        topic_removable=access.topic_editable(user, topic) and not access.has_words_from_others(topic, user),
+        removable_writings={w.id for w in visible_writings if access.writing_removable(user, w)},
+        removable_comments={c.id for c in topic.comments if access.comment_removable(user, c)},
         awaiting=awaiting,
         agent_configured=agent.configured(),
         agent_ready=agent.allowed(db),
@@ -624,6 +628,32 @@ async def revoke_topic(request: Request, topic_id: int, db: Session = Depends(ge
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
+@app.post("/topics/{topic_id}/edit")
+def edit_topic(
+    request: Request,
+    topic_id: int,
+    title: str = Form(...),
+    prompt: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    user = require_user(request)
+    topic = db.get(Topic, topic_id)
+    if not topic or not access.topic_editable(user, topic):
+        return RedirectResponse(f"/topics/{topic_id}", status_code=303)
+    cleaned = title.strip()
+    if not cleaned:
+        flash(request, "A topic needs a title. The old one stays.", "warn")
+        return RedirectResponse(f"/topics/{topic_id}", status_code=303)
+    topic.title = cleaned
+    topic.prompt = prompt.strip()
+    topic.updated_at = utcnow()
+    db.commit()
+    store.rename_local_topic_mirrors(topic)
+    store.write_local(topic)
+    flash(request, "Topic updated on your desk.")
+    return RedirectResponse(f"/topics/{topic_id}", status_code=303)
+
+
 @app.post("/topics/{topic_id}/delete")
 def delete_topic(request: Request, topic_id: int, db: Session = Depends(get_db)):
     user = require_user(request)
@@ -742,6 +772,40 @@ def edit_writing(
     store.write_local(writing.topic, writing)
     flash(request, "Writing updated on your desk.")
     return RedirectResponse(f"/topics/{writing.topic_id}#writing-{writing_id}", status_code=303)
+
+
+@app.post("/writings/{writing_id}/delete")
+def delete_writing(request: Request, writing_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    writing = db.get(Writing, writing_id)
+    if not writing:
+        return RedirectResponse("/", status_code=303)
+    topic = writing.topic
+    anchor = f"/topics/{topic.id}#writing-{writing_id}"
+    if writing.author != user:
+        return RedirectResponse(f"/topics/{topic.id}", status_code=303)
+    if writing.share_status != "private" or writing.revision_status:
+        flash(request, "Pull it back to your desk before removing it.", "warn")
+        return RedirectResponse(anchor, status_code=303)
+    if not access.writing_removable(user, writing):
+        flash(request, "Their notes hang on this writing, so it stays. Only what you wrote is yours to remove.", "warn")
+        return RedirectResponse(anchor, status_code=303)
+    own_notes = sorted(
+        (c for c in topic.comments if c.writing_id == writing.id),
+        key=lambda c: c.created_at,
+        reverse=True,
+    )
+    for c in own_notes:
+        store.delete_comment_file(c)
+        db.delete(c)
+        db.flush()
+    store.delete_writing_files(writing)
+    db.delete(writing)
+    topic.updated_at = utcnow()
+    db.commit()
+    clear_markdown_cache()
+    flash(request, "Writing removed from your desk.")
+    return RedirectResponse(f"/topics/{topic.id}", status_code=303)
 
 
 def _save_revision(request: Request, writing: Writing, title: str, body: str, db: Session):
@@ -934,6 +998,30 @@ def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_
     return RedirectResponse(_topic_anchor(comment.topic_id, comment.writing_id, "comments"), status_code=303)
 
 
+@app.post("/comments/{comment_id}/delete")
+def delete_comment(request: Request, comment_id: int, db: Session = Depends(get_db)):
+    user = require_user(request)
+    comment = db.get(Comment, comment_id)
+    if not comment:
+        return RedirectResponse("/", status_code=303)
+    anchor = _topic_anchor(comment.topic_id, comment.writing_id, "comments")
+    if comment.author != user:
+        return RedirectResponse(anchor, status_code=303)
+    if comment.share_status != "private":
+        flash(request, "Pull the note back before removing it.", "warn")
+        return RedirectResponse(anchor, status_code=303)
+    if not access.comment_removable(user, comment):
+        flash(request, "A reply hangs on this note, so it stays.", "warn")
+        return RedirectResponse(anchor, status_code=303)
+    store.delete_comment_file(comment)
+    comment.topic.updated_at = utcnow()
+    db.delete(comment)
+    db.commit()
+    clear_markdown_cache()
+    flash(request, "Note removed.")
+    return RedirectResponse(anchor, status_code=303)
+
+
 def _shared_topics(db: Session) -> list[Topic]:
     return (
         db.query(Topic)
@@ -981,6 +1069,16 @@ def archive(request: Request, db: Session = Depends(get_db)):
         viewer=user,
         prompt_access={t.id: access.topic_prompt_open(user, t) for t in topics},
     )
+
+
+def _md_item(author: str, when: datetime | None, body: str) -> str:
+    """One list item; later lines are indented so a multi-line note stays inside its bullet."""
+    text = "\n  ".join(body.splitlines())
+    return f"- **{auth.display_for(author)}** ({fmt_dt(when)}): {text}"
+
+
+def _export_filename(ext: str) -> str:
+    return f"between-archive-{utcnow().date().isoformat()}.{ext}"
 
 
 @app.get("/export.json")
@@ -1039,7 +1137,7 @@ def export_json(request: Request, db: Session = Depends(get_db)):
     return Response(
         content=body,
         media_type="application/json",
-        headers={"Content-Disposition": 'attachment; filename="between-archive.json"'},
+        headers={"Content-Disposition": f'attachment; filename="{_export_filename("json")}"'},
     )
 
 
@@ -1061,18 +1159,18 @@ def export_md(request: Request, db: Session = Depends(get_db)):
             if related:
                 lines.append("**Comments**")
                 for c in related:
-                    lines += [f"- **{auth.display_for(c.author)}** ({fmt_dt(c.created_at)}): {c.body}"]
+                    lines.append(_md_item(c.author, c.created_at, c.body))
                 lines.append("")
         loose = [c for c in t.comments if c.writing_id is None and access.comment_open(user, c)]
         if loose:
             lines.append("**Topic comments**")
             for c in loose:
-                lines += [f"- **{auth.display_for(c.author)}** ({fmt_dt(c.created_at)}): {c.body}"]
+                lines.append(_md_item(c.author, c.created_at, c.body))
             lines.append("")
         if t.share_status == "shared" and t.messages:
             lines.append("**Chat**")
             for m in t.messages:
-                lines += [f"- **{auth.display_for(m.author)}** ({fmt_dt(m.created_at)}): {m.body}"]
+                lines.append(_md_item(m.author, m.created_at, m.body))
             lines.append("")
         lines.append("---")
         lines.append("")
@@ -1080,7 +1178,7 @@ def export_md(request: Request, db: Session = Depends(get_db)):
     return Response(
         content=body,
         media_type="text/markdown",
-        headers={"Content-Disposition": 'attachment; filename="between-archive.md"'},
+        headers={"Content-Disposition": f'attachment; filename="{_export_filename("md")}"'},
     )
 
 

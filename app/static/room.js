@@ -8,12 +8,24 @@
     });
   });
 
+  document.addEventListener("keydown", (event) => {
+    const field = event.target;
+    if (!(field instanceof HTMLTextAreaElement) || !field.hasAttribute("data-desk")) return;
+    if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey) || event.isComposing) return;
+    event.preventDefault();
+    if (field.form) field.form.requestSubmit();
+  });
+
   document.addEventListener(
     "submit",
     (event) => {
       const form = event.target;
       if (!(form instanceof HTMLFormElement) || form.id === "chat-form") return;
       if (form.dataset.sent === "1") {
+        event.preventDefault();
+        return;
+      }
+      if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
         event.preventDefault();
         return;
       }
