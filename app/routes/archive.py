@@ -14,7 +14,7 @@ from ..db import get_db
 from ..models import utcnow
 from ..queries import open_topics, shared_topics
 from ..table import build_table
-from ..views import APP_NAME, fmt_dt, render, require_user
+from ..views import APP_NAME, fmt_dt_utc, iso_utc, render, require_user
 
 router = APIRouter()
 
@@ -43,7 +43,7 @@ def archive(request: Request, db: Session = Depends(get_db)) -> Response:
 def _md_item(author: str, when: datetime | None, body: str) -> str:
     """One list item; later lines are indented so a multi-line note stays inside its bullet."""
     text = "\n  ".join(body.splitlines())
-    return f"- **{auth.display_for(author)}** ({fmt_dt(when)}): {text}"
+    return f"- **{auth.display_for(author)}** ({fmt_dt_utc(when)}): {text}"
 
 
 def _export_filename(ext: str) -> str:
@@ -63,7 +63,7 @@ def export_json(request: Request, db: Session = Depends(get_db)) -> Response:
                 "prompt": t.prompt if access.topic_prompt_open(user, t) else "",
                 "created_by": t.created_by,
                 "share_status": t.share_status,
-                "created_at": t.created_at.isoformat() if t.created_at else None,
+                "created_at": iso_utc(t.created_at) or None,
                 "writings": [
                     {
                         "id": w.id,
@@ -71,7 +71,7 @@ def export_json(request: Request, db: Session = Depends(get_db)) -> Response:
                         "title": w.title,
                         "body": w.body,
                         "share_status": w.share_status,
-                        "created_at": w.created_at.isoformat() if w.created_at else None,
+                        "created_at": iso_utc(w.created_at) or None,
                     }
                     for w in t.writings
                     if access.writing_open(user, w)
@@ -84,7 +84,7 @@ def export_json(request: Request, db: Session = Depends(get_db)) -> Response:
                         "author": c.author,
                         "body": c.body,
                         "share_status": c.share_status,
-                        "created_at": c.created_at.isoformat() if c.created_at else None,
+                        "created_at": iso_utc(c.created_at) or None,
                     }
                     for c in t.comments
                     if access.comment_open(user, c)
@@ -94,7 +94,7 @@ def export_json(request: Request, db: Session = Depends(get_db)) -> Response:
                         "id": m.id,
                         "author": m.author,
                         "body": m.body,
-                        "created_at": m.created_at.isoformat() if m.created_at else None,
+                        "created_at": iso_utc(m.created_at) or None,
                     }
                     for m in t.messages
                 ]
@@ -102,7 +102,7 @@ def export_json(request: Request, db: Session = Depends(get_db)) -> Response:
                 else [],
             }
         )
-    body = json.dumps({"app": APP_NAME, "exported_at": utcnow().isoformat(), "topics": payload}, indent=2)
+    body = json.dumps({"app": APP_NAME, "exported_at": iso_utc(utcnow()), "topics": payload}, indent=2)
     return Response(
         content=body,
         media_type="application/json",
@@ -114,7 +114,7 @@ def export_json(request: Request, db: Session = Depends(get_db)) -> Response:
 def export_md(request: Request, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topics = open_topics(db, user)
-    lines = [f"# {APP_NAME} archive", "", f"_Exported {fmt_dt(utcnow())}_", ""]
+    lines = [f"# {APP_NAME} archive", "", f"_Exported {fmt_dt_utc(utcnow())}_", ""]
     for t in topics:
         lines += [f"## {t.title}", ""]
         if access.topic_prompt_open(user, t) and t.prompt:
@@ -123,7 +123,7 @@ def export_md(request: Request, db: Session = Depends(get_db)) -> Response:
             if not access.writing_open(user, w):
                 continue
             heading = w.title or "Untitled writing"
-            lines += [f"### {heading}", f"*{auth.display_for(w.author)} · {fmt_dt(w.created_at)}*", "", w.body, ""]
+            lines += [f"### {heading}", f"*{auth.display_for(w.author)} · {fmt_dt_utc(w.created_at)}*", "", w.body, ""]
             related = [c for c in t.comments if c.writing_id == w.id and access.comment_open(user, c)]
             if related:
                 lines.append("**Comments**")

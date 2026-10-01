@@ -10,8 +10,9 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from .. import access, auth
 from ..db import SessionLocal
 from ..hub import hub
+from ..markdown_render import render_markdown
 from ..models import ChatMessage, Topic, utcnow
-from ..views import fmt_dt_soft
+from ..views import iso_utc
 
 log = logging.getLogger("between")
 
@@ -78,7 +79,8 @@ async def topic_chat(websocket: WebSocket, topic_id: int) -> None:
                     "author": msg.author,
                     "display": auth.display_for(msg.author),
                     "body": msg.body,
-                    "created_at": fmt_dt_soft(msg.created_at),
+                    "html": render_markdown(msg.body),
+                    "created_at": iso_utc(msg.created_at),
                 },
             )
             await hub.broadcast_presence(topic_id)

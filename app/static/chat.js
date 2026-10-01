@@ -29,15 +29,32 @@
     return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   }
 
+  function stamp(who, msg) {
+    who.replaceChildren(`${msg.display} · `);
+    if (window.Between && msg.created_at) who.append(window.Between.timeElement(msg.created_at, "soft"));
+    else who.append("just now");
+  }
+
+  function fill(body, msg) {
+    // `html` is rendered and sanitized by the server, the same way a writing is.
+    if (typeof msg.html === "string") {
+      body.className = "prose compact";
+      body.innerHTML = msg.html;
+    } else {
+      body.className = "";
+      body.textContent = msg.body;
+    }
+  }
+
   function addBubble(msg, pendingMessage) {
     const el = document.createElement("div");
     el.className = "bubble" + (msg.author === config.me ? " mine" : "");
     if (pendingMessage) el.classList.add("pending");
     const who = document.createElement("div");
     who.className = "who";
-    who.textContent = `${msg.display} · ${msg.created_at}`;
+    stamp(who, msg);
     const body = document.createElement("div");
-    body.textContent = msg.body;
+    fill(body, msg);
     el.append(who, body);
     log.appendChild(el);
     log.scrollTop = log.scrollHeight;
@@ -51,7 +68,9 @@
     const item = pendingBubbles.splice(index, 1)[0];
     item.el.classList.remove("pending");
     const who = item.el.querySelector(".who");
-    if (who) who.textContent = `${msg.display} · ${msg.created_at}`;
+    if (who) stamp(who, msg);
+    const body = item.el.lastElementChild;
+    if (body && body !== who) fill(body, msg);
     return true;
   }
 
@@ -169,10 +188,7 @@
     if (!body) return;
     sendTyping(false);
     const payload = { type: "chat", body };
-    addBubble(
-      { author: config.me, display: config.display, created_at: "just now", body },
-      true,
-    );
+    addBubble({ author: config.me, display: config.display, created_at: new Date().toISOString(), body }, true);
     if (ws && ws.readyState === 1) {
       ws.send(JSON.stringify(payload));
     } else {

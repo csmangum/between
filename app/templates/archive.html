@@ -40,7 +40,7 @@
       {% if loop.first %}<div class="comments"><p class="meta">Notes</p>{% endif %}
       <div class="comment">
         <div class="author-chip">{{ display_for(c.author) }} · {{ c.created_at|when_soft }}</div>
-        <div class="body">{{ c.body }}</div>
+        <div class="body prose compact">{{ c.body|md|safe }}</div>
       </div>
       {% if loop.last %}</div>{% endif %}
     {% endfor %}
@@ -51,7 +51,7 @@
         {% for m in t.messages %}
           <div class="comment">
             <div class="author-chip">{{ display_for(m.author) }} · {{ m.created_at|when_soft }}</div>
-            <div class="body">{{ m.body }}</div>
+            <div class="body prose compact">{{ m.body|md|safe }}</div>
           </div>
         {% endfor %}
       </div>

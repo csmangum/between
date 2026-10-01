@@ -8,6 +8,7 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from sqlalchemy.orm import Session
 from starlette.responses import Response
 
@@ -32,21 +33,36 @@ def md(text: str) -> str:
     return render_markdown(text)
 
 
+def aware(value: datetime) -> datetime:
+    """SQLite hands back naive datetimes; everything stored is UTC."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
+def iso_utc(value: datetime | None) -> str:
+    """An unambiguous instant for machines: the browser localizes it, exports keep the offset."""
+    if not value:
+        return ""
+    return aware(value).astimezone(UTC).isoformat(timespec="seconds")
+
+
+def fmt_dt_utc(value: datetime | None) -> str:
+    """For files that leave the room, where the reader's clock is unknown."""
+    if not value:
+        return ""
+    return aware(value).astimezone(UTC).strftime("%b %d, %Y · %H:%M UTC")
+
+
 def fmt_dt(value: datetime | None) -> str:
     if not value:
         return ""
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=UTC)
-    return value.astimezone().strftime("%b %d, %Y · %H:%M")
+    return aware(value).astimezone().strftime("%b %d, %Y · %H:%M")
 
 
 def fmt_dt_soft(value: datetime | None) -> str:
     """A quieter relative time for the room's pacing."""
     if not value:
         return ""
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=UTC)
-    local = value.astimezone()
+    local = aware(value).astimezone()
     now = datetime.now(UTC).astimezone()
     seconds = int((now - local).total_seconds())
     if seconds < 45:
@@ -73,9 +89,26 @@ def count_label(n: int, singular: str, plural: str | None = None) -> str:
     return f"{number} {word}"
 
 
+def _time_tag(value: datetime | None, mode: str, fallback: str) -> Markup:
+    """The server's rendering is the fallback; room.js re-renders it in the viewer's own time zone."""
+    if not value:
+        return Markup("")
+    return Markup('<time datetime="{iso}" data-when="{mode}">{text}</time>').format(
+        iso=iso_utc(value), mode=mode, text=fallback
+    )
+
+
+def when(value: datetime | None) -> Markup:
+    return _time_tag(value, "exact", fmt_dt(value))
+
+
+def when_soft(value: datetime | None) -> Markup:
+    return _time_tag(value, "soft", fmt_dt_soft(value))
+
+
 templates.env.filters["md"] = md
-templates.env.filters["when"] = fmt_dt
-templates.env.filters["when_soft"] = fmt_dt_soft
+templates.env.filters["when"] = when
+templates.env.filters["when_soft"] = when_soft
 templates.env.filters["count_label"] = count_label
 templates.env.filters["share_label"] = share.label
 templates.env.globals["app_name"] = APP_NAME
