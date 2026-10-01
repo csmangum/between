@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_returned.html" import block as returned_block, item as returned_item %}
+{% from "_search_form.html" import search_form %}
 {% block title %}Kept · {{ app_name }}{% endblock %}
 {% block body %}
 <section class="hero">
@@ -9,6 +10,7 @@
     <a class="btn" href="/export.md">Take a Markdown copy</a>
     <a class="btn ghost" href="/export.json">Take a JSON copy</a>
   </div>
+  {{ search_form('') }}
 </section>
 
 {% for t in topics %}

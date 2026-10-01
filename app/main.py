@@ -14,7 +14,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.types import Scope
 
-from . import auth, config
+from . import auth, config, search
 from .db import Base, db_ok, engine, migrate
 from .events import stream
 from .routes import routers
@@ -25,6 +25,7 @@ from .views import APP_NAME, BASE_DIR, RedirectNeeded, current_user, render
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     migrate()
+    search.ensure_index(engine)
     auth.load_people()
 
 
