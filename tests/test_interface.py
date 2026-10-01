@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.main import app, reading_time, when_tag, word_count
+from app.main import app
 from app.models import ChatMessage, Topic
-
+from app.reading import word_count
+from app.views import reading_time, when_tag
 
 HEX_COLOUR = re.compile(r"#[0-9a-fA-F]{3,8}\b")
 CONTENTS_OPEN = '<nav class="contents" aria-label="Writings in this topic">'
@@ -52,7 +53,7 @@ def _shared_topic(a: TestClient, b: TestClient) -> int:
 
 
 def test_when_tag_carries_the_exact_moment():
-    moment = datetime(2026, 3, 4, 15, 6, 7, tzinfo=timezone.utc)
+    moment = datetime(2026, 3, 4, 15, 6, 7, tzinfo=UTC)
     html = str(when_tag(moment))
     assert html.startswith('<time datetime="2026-03-04T15:06:07+00:00" title="')
     assert html.endswith("</time>")
@@ -87,7 +88,10 @@ def test_preview_needs_someone_in_the_room(client: TestClient):
 
 def test_preview_renders_like_the_page_and_stays_clean(client: TestClient):
     _login(client, "chris", "pass1")
-    response = client.post("/preview", data={"body": "# A heading\n\n<script>alert(1)</script>**bold** [x](javascript:alert(1))"})
+    response = client.post(
+        "/preview",
+        data={"body": "# A heading\n\n<script>alert(1)</script>**bold** [x](javascript:alert(1))"},
+    )
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert response.headers["cache-control"] == "no-store"
@@ -216,10 +220,21 @@ def test_margin_lines_from_the_same_person_group_together_when_close_in_time(db_
     a, b = _pair()
     topic_id = _shared_topic(a, b)
     topic = db_session.get(Topic, topic_id)
-    now = datetime.now(timezone.utc)
-    db_session.add(ChatMessage(topic_id=topic.id, author="chris", body="first-line", created_at=now - timedelta(hours=2)))
-    db_session.add(ChatMessage(topic_id=topic.id, author="chris", body="second-line", created_at=now - timedelta(hours=2) + timedelta(seconds=30)))
-    db_session.add(ChatMessage(topic_id=topic.id, author="chris", body="an-hour-later", created_at=now - timedelta(hours=1)))
+    now = datetime.now(UTC)
+    db_session.add(
+        ChatMessage(topic_id=topic.id, author="chris", body="first-line", created_at=now - timedelta(hours=2))
+    )
+    db_session.add(
+        ChatMessage(
+            topic_id=topic.id,
+            author="chris",
+            body="second-line",
+            created_at=now - timedelta(hours=2) + timedelta(seconds=30),
+        )
+    )
+    db_session.add(
+        ChatMessage(topic_id=topic.id, author="chris", body="an-hour-later", created_at=now - timedelta(hours=1))
+    )
     db_session.add(ChatMessage(topic_id=topic.id, author="friend", body="third-line", created_at=now))
     db_session.commit()
     page = a.get(f"/topics/{topic_id}").text
