@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from . import access
 from .db import SessionLocal
-from .models import Topic, Writing
+from .models import Topic, Withdrawal, Writing
 
 
 def sealed_offer_count(user: str | None, db: Session | None = None) -> int:
@@ -83,3 +83,14 @@ def open_topics(db: Session, user: str) -> list[Topic]:
         .all()
     )
     return [t for t in topics if access.topic_open(user, t)]
+
+
+def topic_withdrawals(db: Session, topic_id: int) -> list[Withdrawal]:
+    """Every stub this topic has produced, oldest first. The caller filters by who may see each."""
+    return db.query(Withdrawal).filter(Withdrawal.topic_id == topic_id).order_by(Withdrawal.withdrawn_at.asc()).all()
+
+
+def withdrawals_for(db: Session, user: str) -> list[Withdrawal]:
+    """What returned to the other person's desk after this person had opened it."""
+    stubs = db.query(Withdrawal).order_by(Withdrawal.withdrawn_at.asc()).all()
+    return [s for s in stubs if access.withdrawal_visible(user, s)]

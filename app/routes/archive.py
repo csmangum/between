@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from datetime import datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, Response
@@ -11,8 +13,8 @@ from sqlalchemy.orm import Session
 
 from .. import access, auth
 from ..db import get_db
-from ..models import utcnow
-from ..queries import open_topics, shared_topics
+from ..models import Topic, Withdrawal, utcnow
+from ..queries import open_topics, shared_topics, withdrawals_for
 from ..table import build_table
 from ..views import APP_NAME, fmt_dt_utc, iso_utc, render, require_user
 
@@ -26,10 +28,25 @@ def table_page(request: Request, db: Session = Depends(get_db)) -> Response:
     return render(request, "table.html", db=db, lately=view.lately, cards=view.cards)
 
 
+Groups = tuple[dict[int, list[Withdrawal]], list[list[Withdrawal]]]
+
+
+def _returned(db: Session, user: str, topics: list[Topic]) -> Groups:
+    """Stubs grouped by topic: those inside topics this person still opens, and whole topics that are gone."""
+    by_topic: dict[int, list[Withdrawal]] = defaultdict(list)
+    for stub in withdrawals_for(db, user):
+        by_topic[stub.topic_id].append(stub)
+    open_ids = {t.id for t in topics}
+    inside = {tid: [s for s in group if s.kind != "topic"] for tid, group in by_topic.items() if tid in open_ids}
+    gone = [group for tid, group in by_topic.items() if tid not in open_ids]
+    return inside, gone
+
+
 @router.get("/archive", response_class=HTMLResponse)
 def archive(request: Request, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topics = open_topics(db, user)
+    returned_by_topic, returned_gone = _returned(db, user, topics)
     return render(
         request,
         "archive.html",
@@ -37,7 +54,32 @@ def archive(request: Request, db: Session = Depends(get_db)) -> Response:
         topics=topics,
         viewer=user,
         prompt_access={t.id: access.topic_prompt_open(user, t) for t in topics},
+        returned_by_topic=returned_by_topic,
+        returned_gone=returned_gone,
     )
+
+
+def _stub_json(s: Withdrawal) -> dict[str, Any]:
+    return {
+        "kind": s.kind,
+        "id": s.object_id,
+        "topic_id": s.topic_id,
+        "topic_title": s.topic_title,
+        "title": s.title,
+        "author": s.author,
+        "returned_by": s.actor,
+        "opened_at": iso_utc(s.opened_at) or None,
+        "returned_at": iso_utc(s.withdrawn_at),
+    }
+
+
+def _stub_md(s: Withdrawal) -> str:
+    if s.kind == "comment":
+        name = "a note"
+    else:
+        name = f"“{s.topic_title if s.kind == 'topic' else s.title or 'Untitled writing'}”"
+    opened = f"open between you from {fmt_dt_utc(s.opened_at)}; " if s.opened_at else ""
+    return f"- {name} — {opened}returned to {auth.display_for(s.author)}'s desk {fmt_dt_utc(s.withdrawn_at)}"
 
 
 def _md_item(author: str, when: datetime | None, body: str) -> str:
@@ -54,6 +96,7 @@ def _export_filename(ext: str) -> str:
 def export_json(request: Request, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topics = open_topics(db, user)
+    returned_by_topic, returned_gone = _returned(db, user, topics)
     payload = []
     for t in topics:
         payload.append(
@@ -100,9 +143,18 @@ def export_json(request: Request, db: Session = Depends(get_db)) -> Response:
                 ]
                 if t.share_status == "shared"
                 else [],
+                "returned": [_stub_json(s) for s in returned_by_topic.get(t.id, [])],
             }
         )
-    body = json.dumps({"app": APP_NAME, "exported_at": iso_utc(utcnow()), "topics": payload}, indent=2)
+    body = json.dumps(
+        {
+            "app": APP_NAME,
+            "exported_at": iso_utc(utcnow()),
+            "topics": payload,
+            "returned_topics": [[_stub_json(s) for s in group] for group in returned_gone],
+        },
+        indent=2,
+    )
     return Response(
         content=body,
         media_type="application/json",
@@ -114,6 +166,7 @@ def export_json(request: Request, db: Session = Depends(get_db)) -> Response:
 def export_md(request: Request, db: Session = Depends(get_db)) -> Response:
     user = require_user(request)
     topics = open_topics(db, user)
+    returned_by_topic, returned_gone = _returned(db, user, topics)
     lines = [f"# {APP_NAME} archive", "", f"_Exported {fmt_dt_utc(utcnow())}_", ""]
     for t in topics:
         lines += [f"## {t.title}", ""]
@@ -141,8 +194,18 @@ def export_md(request: Request, db: Session = Depends(get_db)) -> Response:
             for m in t.messages:
                 lines.append(_md_item(m.author, m.created_at, m.body))
             lines.append("")
+        if returned_by_topic.get(t.id):
+            lines.append("**Returned**")
+            lines += [_stub_md(s) for s in returned_by_topic[t.id]]
+            lines.append("")
         lines.append("---")
         lines.append("")
+    if returned_gone:
+        note = "_Topics you opened together that are theirs again. Titles and dates stay; pages do not._"
+        lines += ["## Returned", "", note, ""]
+        for group in returned_gone:
+            lines += [_stub_md(s) for s in group]
+            lines.append("")
     body = "\n".join(lines)
     return Response(
         content=body,

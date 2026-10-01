@@ -100,6 +100,28 @@ class Preference(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 
+class Withdrawal(Base):
+    """What the person who lost access keeps when something open between you returns to its author's desk.
+    A snapshot, not a reference: it outlives the original being edited or removed, and never holds a body."""
+
+    __tablename__ = "withdrawals"
+    __table_args__ = (
+        Index("ix_withdrawals_topic_id", "topic_id"),
+        Index("ix_withdrawals_object", "kind", "object_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    object_id: Mapped[int] = mapped_column(Integer)
+    topic_id: Mapped[int] = mapped_column(Integer)
+    topic_title: Mapped[str] = mapped_column(String(240))
+    title: Mapped[str] = mapped_column(String(240), default="")
+    author: Mapped[str] = mapped_column(String(80))
+    actor: Mapped[str] = mapped_column(String(80))
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    withdrawn_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
     __table_args__ = (Index("ix_chat_messages_topic_id", "topic_id"),)

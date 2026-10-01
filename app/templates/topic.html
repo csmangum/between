@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_returned.html" import block as returned_block %}
 {% block title %}{{ topic.title }} · {{ app_name }}{% endblock %}
 {% block body %}
 {% macro note(c, sealed_line) %}
@@ -67,7 +68,13 @@
     </div>
   </section>
 {% elif topic.created_by != user and topic.share_status == 'private' %}
-  <p class="meta">{{ display_for(topic.created_by) }} pulled this topic back to their desk. Only what you wrote here is shown; it stays yours.</p>
+  {% if returned_topic %}
+    <p class="meta returned-line">
+      Open between you{% if returned_topic.opened_at %} from {{ returned_topic.opened_at|when_soft }}{% endif %} until {{ returned_topic.withdrawn_at|when_soft }}, when {{ display_for(topic.created_by) }} returned it to their desk. Their pages are theirs again; what you wrote here is still yours.
+    </p>
+  {% else %}
+    <p class="meta">{{ display_for(topic.created_by) }} pulled this topic back to their desk. Only what you wrote here is shown; it stays yours.</p>
+  {% endif %}
 {% endif %}
 
 {% if topic.created_by == user %}
@@ -123,6 +130,9 @@
         {% if w.author == user or w.share_status == 'shared' %}
           <h3>{{ w.title or "Untitled writing" }}</h3>
           <div class="prose">{{ w.body|md|safe }}</div>
+          {% if w.share_status == 'private' and returned_mine.get(w.id) %}
+            <p class="meta returned-line">Returned from the table {{ returned_mine[w.id].withdrawn_at|when_soft }}. {{ other }} keeps a note that it was open, not the page.</p>
+          {% endif %}
           {% if w.author != user and w.revision_status == 'offered' %}
             <p class="sealed">{{ display_for(w.author) }} sent a revision. The writing you already opened stays until you open this.</p>
             <div class="actions">
@@ -229,6 +239,8 @@
     {% else %}
       <p class="empty">No writings here yet. The first page can wait on your desk.</p>
     {% endfor %}
+
+    {{ returned_block(returned_writings + returned_notes, other) }}
 
     <section class="panel compose-gap" id="write">
       <h2 class="compose-title">Write privately</h2>

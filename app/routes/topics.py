@@ -12,7 +12,7 @@ from ..db import get_db
 from ..hub import hub
 from ..markdown_render import clear_markdown_cache
 from ..models import Comment, Topic, Writing, utcnow
-from ..queries import load_topic
+from ..queries import load_topic, topic_withdrawals
 from ..views import flash, other_display, render, require_user
 
 router = APIRouter()
@@ -53,6 +53,8 @@ def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)) -
     for c in topic.comments:
         if access.comment_visible(user, c):
             comments_by_writing[c.writing_id].append(c)
+    stubs = topic_withdrawals(db, topic_id)
+    returned = [s for s in stubs if access.withdrawal_visible(user, s)]
     return render(
         request,
         "topic.html",
@@ -67,6 +69,10 @@ def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)) -
         removable_writings={w.id for w in visible_writings if access.writing_removable(user, w)},
         removable_comments={c.id for c in topic.comments if access.comment_removable(user, c)},
         awaiting=awaiting,
+        returned_topic=next((s for s in returned if s.kind == "topic"), None),
+        returned_writings=[s for s in returned if s.kind == "writing"],
+        returned_notes=[s for s in returned if s.kind == "comment"],
+        returned_mine={s.object_id: s for s in stubs if s.kind == "writing" and s.author == user},
         agent_configured=agent.configured(),
         agent_ready=agent.allowed(db),
         agent_note=request.query_params.get("agent"),
@@ -92,6 +98,7 @@ def accept_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
     topic = db.get(Topic, topic_id)
     if topic and topic.created_by != user and topic.share_status == "offered":
         share.set_status(topic, "shared")
+        share.clear_withdrawals(db, "topic", topic.id)
         topic.updated_at = utcnow()
         db.commit()
         store.write_shared(topic)
@@ -99,11 +106,13 @@ def accept_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 
-async def _close_topic(db: Session, topic: Topic) -> None:
-    """Shared → private: everything inside returns to its author, the shared mirror goes, the margin closes."""
-    writings, comments = share.fold_topic(topic)
+async def _close_topic(db: Session, topic: Topic, actor: str) -> bool:
+    """Shared → private: everything inside returns to its author, the shared mirror goes, the margin closes.
+    Returns whether anyone lost access they had, in which case they keep a stub of what was open."""
+    writings, comments, stubs = share.fold_topic(topic, actor)
     share.set_status(topic, "private")
     topic.updated_at = utcnow()
+    db.add_all(stubs)
     db.commit()
     store.remove_shared(topic)
     store.write_local(topic)
@@ -114,6 +123,7 @@ async def _close_topic(db: Session, topic: Topic) -> None:
         store.write_local(topic, comment=c)
     clear_markdown_cache()
     await hub.close_room(topic.id)
+    return bool(stubs)
 
 
 @router.post("/topics/{topic_id}/decline")
@@ -121,7 +131,7 @@ async def decline_topic(request: Request, topic_id: int, db: Session = Depends(g
     user = require_user(request)
     topic = load_topic(db, topic_id)
     if topic and topic.created_by != user and topic.share_status == "offered":
-        await _close_topic(db, topic)
+        await _close_topic(db, topic, user)
         flash(request, "Left unopened. It returned to their desk.")
         return RedirectResponse("/", status_code=303)
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
@@ -132,8 +142,12 @@ async def revoke_topic(request: Request, topic_id: int, db: Session = Depends(ge
     user = require_user(request)
     topic = load_topic(db, topic_id)
     if topic and topic.created_by == user and topic.share_status in {"offered", "shared"}:
-        await _close_topic(db, topic)
-        flash(request, "Pulled back. Everything inside returned to the desk it came from.")
+        was_open = await _close_topic(db, topic, user)
+        if was_open:
+            other = other_display(user)
+            flash(request, f"Pulled back. {other} keeps a note that it was open between you, not the pages.")
+        else:
+            flash(request, "Pulled back. Everything inside returned to the desk it came from.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
 

@@ -86,6 +86,7 @@ def accept_comment(request: Request, comment_id: int, db: Session = Depends(get_
         if comment.topic.share_status != "shared":
             return RedirectResponse(_anchor(comment), status_code=303)
         share.set_status(comment, "shared")
+        share.clear_withdrawals(db, "comment", comment.id)
         comment.topic.updated_at = utcnow()
         db.commit()
         store.write_shared(comment.topic, comment=comment)
@@ -118,12 +119,15 @@ def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_
     if not comment:
         return RedirectResponse("/", status_code=303)
     if comment.author == user and comment.share_status in {"offered", "shared"}:
+        stub = share.withdrawal("comment", comment, user)
         share.set_status(comment, "private")
         comment.topic.updated_at = utcnow()
+        if stub:
+            db.add(stub)
         db.commit()
         store.remove_shared(comment.topic, comment=comment)
         store.write_local(comment.topic, comment=comment)
-        flash(request, "Comment pulled back.")
+        flash(request, "Comment pulled back." + (" They keep a note that it was open." if stub else ""))
     return RedirectResponse(_anchor(comment), status_code=303)
 
 

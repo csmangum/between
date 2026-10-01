@@ -75,6 +75,7 @@ def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_
         if writing.topic.share_status != "shared":
             return RedirectResponse(_anchor(writing), status_code=303)
         share.set_status(writing, "shared")
+        share.clear_withdrawals(db, "writing", writing.id)
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_shared(writing.topic, writing)
@@ -107,15 +108,22 @@ def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_
     if not writing:
         return RedirectResponse("/", status_code=303)
     if writing.author == user and writing.share_status in {"offered", "shared"}:
+        stub = share.withdrawal("writing", writing, user)
         share.fold_revision_into_private(writing)
         share.set_status(writing, "private")
         writing.topic.updated_at = utcnow()
+        if stub:
+            db.add(stub)
         db.commit()
         store.remove_shared(writing.topic, writing)
         store.write_local(writing.topic, writing)
         store.write_revision(writing)
         clear_markdown_cache()
-        flash(request, "Pulled back to your desk.")
+        if stub:
+            other = other_display(user)
+            flash(request, f"Pulled back to your desk. {other} keeps a note that it was open, not the page.")
+        else:
+            flash(request, "Pulled back to your desk.")
     return RedirectResponse(_anchor(writing), status_code=303)
 
 
