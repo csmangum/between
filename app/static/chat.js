@@ -82,30 +82,57 @@
     return bubbles.length ? bubbles[bubbles.length - 1] : null;
   }
 
-  const SAFE_MARKDOWN_TAGS = new Set([
-    "A", "ABBR", "BLOCKQUOTE", "BR", "CODE", "DD", "DIV", "DL", "DT", "EM", "H1", "H2", "H3", "H4",
-    "HR", "LI", "OL", "P", "PRE", "SUB", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL",
-    "STRONG",
-  ]);
+  const SAFE_MARKDOWN_ELEMENTS = Object.fromEntries(
+    [
+      "a", "abbr", "blockquote", "br", "code", "dd", "div", "dl", "dt", "em", "h1", "h2", "h3", "h4",
+      "hr", "li", "ol", "p", "pre", "sub", "sup", "table", "tbody", "td", "th", "thead", "tr", "ul",
+      "strong",
+    ].map((tag) => [tag.toUpperCase(), () => document.createElement(tag)]),
+  );
   const BLOCKED_MARKUP_TAGS = new Set(["IFRAME", "MATH", "OBJECT", "SCRIPT", "STYLE", "SVG", "TEMPLATE"]);
 
   function appendSafeMarkup(target, markup) {
-    const parsed = new DOMParser().parseFromString(markup, "text/html");
-    const copyNode = (parent, node) => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        parent.append(document.createTextNode(node.textContent || ""));
-        return;
+    const parents = [target];
+    let blockedTag = null;
+    const decodeText = (text) => text.replace(/&(?:#(x[0-9a-f]+|[0-9]+)|(amp|lt|gt|quot|apos|nbsp));/gi, (entity, numeric, named) => {
+      if (named) {
+        return { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0" }[named.toLowerCase()];
       }
-      if (!(node instanceof HTMLElement)) return;
-      if (BLOCKED_MARKUP_TAGS.has(node.tagName)) return;
-      if (!SAFE_MARKDOWN_TAGS.has(node.tagName)) {
-        node.childNodes.forEach((child) => copyNode(parent, child));
-        return;
+      const point = numeric[0].toLowerCase() === "x" ? Number.parseInt(numeric.slice(1), 16) : Number.parseInt(numeric, 10);
+      return point <= 0x10ffff ? String.fromCodePoint(point) : "\uFFFD";
+    });
+    const tokens = markup.match(/<[^>]*>|[^<]+|</g) || [];
+    for (const token of tokens) {
+      if (!token.startsWith("<") || token === "<") {
+        if (!blockedTag) parents[parents.length - 1].append(document.createTextNode(decodeText(token)));
+        continue;
       }
-
-      const copy = document.createElement(node.tagName.toLowerCase());
-      if (node.tagName === "A") {
-        const href = node.getAttribute("href");
+      const match = token.match(/^<\s*(\/?)\s*([a-z][a-z0-9]*)\b([^>]*)>/i);
+      if (!match) continue;
+      const [, closing, rawTag, attributes] = match;
+      const tag = rawTag.toUpperCase();
+      if (blockedTag) {
+        if (tag === blockedTag && closing) blockedTag = null;
+        continue;
+      }
+      if (BLOCKED_MARKUP_TAGS.has(tag) && !closing) {
+        blockedTag = tag;
+        continue;
+      }
+      if (closing) {
+        const index = parents.map((parent) => parent.tagName).lastIndexOf(tag);
+        if (index > 0) parents.length = index;
+        continue;
+      }
+      const createElement = SAFE_MARKDOWN_ELEMENTS[tag];
+      if (!createElement) continue;
+      const copy = createElement();
+      const attribute = (name) => {
+        const found = attributes.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i"));
+        return found ? decodeText(found[1] ?? found[2] ?? found[3]) : null;
+      };
+      if (tag === "A") {
+        const href = attribute("href");
         if (href) {
           try {
             const url = new URL(href, location.href);
@@ -120,19 +147,21 @@
             /* Ignore malformed links. */
           }
         }
-        const title = node.getAttribute("title");
+        const title = attribute("title");
         if (title) copy.setAttribute("title", title);
-      } else if (node.tagName === "ABBR") {
-        const title = node.getAttribute("title");
+      } else if (tag === "ABBR") {
+        const title = attribute("title");
         if (title) copy.setAttribute("title", title);
-      } else if (["LI", "SUP"].includes(node.tagName)) {
-        const id = node.getAttribute("id");
+      } else if (tag === "LI" || tag === "SUP") {
+        const id = attribute("id");
         if (id && /^fn(ref)?:[A-Za-z0-9_.:-]+$/.test(id)) copy.id = id;
       }
-      node.childNodes.forEach((child) => copyNode(copy, child));
-      parent.append(copy);
-    };
-    parsed.body.childNodes.forEach((node) => copyNode(target, node));
+      const classes = (attribute("class") || "").split(/\s+/);
+      const allowedClasses = tag === "DIV" ? ["footnote"] : tag === "A" ? ["footnote-ref", "footnote-backref"] : [];
+      classes.filter((name) => allowedClasses.includes(name)).forEach((name) => copy.classList.add(name));
+      parents[parents.length - 1].append(copy);
+      if (!["BR", "HR"].includes(tag) && !/\/\s*>$/.test(token)) parents.push(copy);
+    }
   }
 
   function setTimestamp(element, msg) {
