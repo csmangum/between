@@ -65,7 +65,7 @@
     const restored = [];
     fields.forEach((field) => {
       const saved = readDraft(draftKey(form, field));
-      if (saved !== null && saved.trim() !== "" && saved !== field.defaultValue && field.value === field.defaultValue) {
+      if (saved !== null && saved !== field.defaultValue && field.value === field.defaultValue) {
         field.value = saved;
         restored.push(field);
       }
@@ -74,7 +74,7 @@
         clearTimeout(timer);
         timer = setTimeout(() => {
           const value = field.value;
-          writeDraft(draftKey(form, field), value === field.defaultValue || !value.trim() ? null : value);
+          writeDraft(draftKey(form, field), value === field.defaultValue ? null : value);
         }, 250);
       });
     });

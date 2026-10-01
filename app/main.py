@@ -229,7 +229,7 @@ def reading_time(text: str | None) -> str:
         return ""
     if words < WORDS_PER_MINUTE:
         return "under a minute"
-    return f"{round(words / WORDS_PER_MINUTE)} min read"
+    return f"{(words + WORDS_PER_MINUTE // 2) // WORDS_PER_MINUTE} min read"
 
 
 templates.env.filters["md"] = md
@@ -1336,6 +1336,7 @@ async def topic_chat(websocket: WebSocket, topic_id: int):
                     "display": auth.display_for(msg.author),
                     "body": msg.body,
                     "created_at": fmt_dt_soft(msg.created_at),
+                    "created_at_epoch_ms": epoch_ms(msg.created_at),
                 },
             )
             await hub.broadcast_presence(topic_id)

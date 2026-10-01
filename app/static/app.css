@@ -372,7 +372,6 @@ textarea {
   line-height: 1.65;
   font-size: 17px;
 }
-textarea[data-desk] { overflow: hidden; }
 textarea.chat-input {
   min-height: 78px;
   font-family: var(--sans);

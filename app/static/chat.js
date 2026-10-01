@@ -86,7 +86,7 @@
     const mine = msg.author === config.me;
     const wasNearBottom = nearBottom();
     const previous = lastBubble();
-    const now = Date.now();
+    const now = msg.created_at_epoch_ms || Date.now();
     const el = document.createElement("div");
     el.className = "bubble" + (mine ? " mine" : "");
     el.dataset.author = msg.author;
@@ -126,6 +126,20 @@
     if (index === -1) return false;
     const item = pendingBubbles.splice(index, 1)[0];
     item.el.classList.remove("pending");
+    const serverEpoch = msg.created_at_epoch_ms;
+    if (serverEpoch) {
+      item.el.dataset.at = String(serverEpoch);
+      item.el.classList.remove("cont");
+      const previous = item.el.previousElementSibling;
+      if (
+        previous &&
+        previous.classList.contains("bubble") &&
+        previous.dataset.author === msg.author &&
+        serverEpoch - Number(previous.dataset.at || 0) < groupWindowMs
+      ) {
+        item.el.classList.add("cont");
+      }
+    }
     const who = item.el.querySelector(".who");
     if (who) who.textContent = `${msg.display} · ${msg.created_at}`;
     return true;

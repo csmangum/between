@@ -57,10 +57,11 @@
 
   function forgetDrafts() {
     try {
+      const prefix = `${DRAFT_PREFIX}${document.body.dataset.user || ""}:`;
       const doomed = [];
       for (let i = 0; i < localStorage.length; i += 1) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(DRAFT_PREFIX)) doomed.push(key);
+        if (key && key.startsWith(prefix)) doomed.push(key);
       }
       doomed.forEach((key) => localStorage.removeItem(key));
     } catch (_) {
