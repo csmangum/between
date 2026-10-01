@@ -161,6 +161,7 @@
       field.value = field.defaultValue;
       dropDraft(key);
       note.remove();
+      field.dispatchEvent(new Event("input", { bubbles: true }));
       field.focus();
     });
     note.append(discard);

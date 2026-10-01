@@ -161,3 +161,36 @@ def test_room_script_ships_drafts_and_local_times(client: TestClient):
     chat = client.get("/static/chat.js").text
     assert "Between.timeElement" in chat
     assert "msg.html" in chat
+
+
+# --- The writing surface ---------------------------------------------------------------------
+
+EDITOR_TAG = re.compile(r'<textarea id="(?P<id>[^"]+)"[^>]*data-editor="(?P<kind>[^"]+)"')
+
+
+def test_writing_fields_ask_for_the_desk_editor(client: TestClient):
+    _login(client, "chris", "pass1")
+    topic_id = _topic(client)
+    client.post(f"/topics/{topic_id}/writings", data={"title": "", "body": "A page."}, follow_redirects=False)
+
+    page = client.get(f"/topics/{topic_id}").text
+    kinds = {m["id"]: m["kind"] for m in EDITOR_TAG.finditer(page)}
+    writing_ids = {k for k, v in kinds.items() if v == "writing"}
+    note_ids = {k for k, v in kinds.items() if v == "note"}
+    assert "wbody" in writing_ids
+    assert {k for k in writing_ids if k.startswith("edit-body-")}, kinds
+    assert {"topic-prompt", "topic-note"} <= note_ids
+    assert {k for k in note_ids if k.startswith("note-")}, kinds
+    assert "chat-body" not in kinds  # the margin keeps its own small composer
+    assert '<script src="/static/desk.js" defer></script>' in page
+
+    home = client.get("/").text
+    assert {m["id"]: m["kind"] for m in EDITOR_TAG.finditer(home)} == {"prompt": "note"}
+
+
+def test_desk_script_previews_through_the_server_and_needs_no_third_party(client: TestClient):
+    script = client.get("/static/desk.js").text
+    assert 'fetch("/preview"' in script
+    assert 'credentials: "same-origin"' in script
+    assert 'querySelectorAll("textarea[data-editor]")' in script
+    assert "https://" not in script.replace("https?:", "")  # nothing loaded from elsewhere
