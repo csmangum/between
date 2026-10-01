@@ -63,7 +63,7 @@
   });
   if (newPill) {
     newPill.addEventListener("click", () => {
-      scrollToEnd();
+      log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
       hidePill();
     });
   }

@@ -44,6 +44,7 @@
 :root[data-theme="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { scroll-behavior: smooth; }
 html, body { margin: 0; padding: 0; }
 ::selection { background: color-mix(in srgb, var(--accent) 35%, transparent); color: var(--ink); }
@@ -795,7 +796,6 @@ button.full, .btn.full { width: 100%; margin-top: 16px; }
   flex-direction: column;
   gap: 10px;
   padding-right: 4px;
-  scroll-behavior: smooth;
 }
 .bubble {
   max-width: 92%;
@@ -1202,7 +1202,7 @@ button.quiet-danger {
 button.quiet-danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
-  html, .chat-log { scroll-behavior: auto; }
+  html { scroll-behavior: auto; }
   *, *::before, *::after {
     animation: none !important;
     transition: none !important;
