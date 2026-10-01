@@ -30,6 +30,8 @@
         <article class="writing">
           <div class="author-chip">
             {{ display_for(w.author) }} · {{ w.created_at|when_soft }}
+            {% set read = w.body|reading_time %}
+            {% if read %}· <span class="reading-time">{{ read }}</span>{% endif %}
             {% if w.share_status == 'shared' and w.accepted_at %}
               · kept {{ w.accepted_at|when_soft }}
             {% endif %}

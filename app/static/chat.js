@@ -82,6 +82,16 @@
     return bubbles.length ? bubbles[bubbles.length - 1] : null;
   }
 
+  function setTimestamp(element, msg) {
+    element.textContent = "";
+    element.append(`${msg.display} · `);
+    if (window.Between && msg.created_at && !Number.isNaN(Date.parse(msg.created_at))) {
+      element.append(window.Between.timeElement(msg.created_at, "soft"));
+    } else {
+      element.append(msg.created_at || "just now");
+    }
+  }
+
   function addBubble(msg, pendingMessage) {
     const mine = msg.author === config.me;
     const wasNearBottom = nearBottom();
@@ -101,9 +111,11 @@
     if (pendingMessage) el.classList.add("pending");
     const who = document.createElement("div");
     who.className = "who";
-    who.textContent = `${msg.display} · ${msg.created_at}`;
+    setTimestamp(who, msg);
     const body = document.createElement("div");
-    body.textContent = msg.body;
+    body.className = "prose compact";
+    if (typeof msg.html === "string") body.innerHTML = msg.html;
+    else body.textContent = msg.body;
     el.append(who, body);
     log.appendChild(el);
     if (pendingMessage) pendingBubbles.push({ body: msg.body, el });
@@ -141,7 +153,7 @@
       }
     }
     const who = item.el.querySelector(".who");
-    if (who) who.textContent = `${msg.display} · ${msg.created_at}`;
+    if (who) setTimestamp(who, msg);
     return true;
   }
 

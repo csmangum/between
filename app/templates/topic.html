@@ -1,14 +1,15 @@
 {% extends "base.html" %}
+{% from "_returned.html" import block as returned_block %}
 {% block title %}{{ topic.title }} · {{ app_name }}{% endblock %}
 {% block body %}
 {% macro note(c, sealed_line) %}
   <div class="comment">
     <div class="author-chip">
-      {{ display_for(c.author) }} · {{ c.created_at|when_tag }}
+      {{ display_for(c.author) }} · {{ c.created_at|when_soft }}
       · <span class="badge {{ c.share_status }}">{{ c.share_status|share_label }}</span>
     </div>
     {% if c.author == user or c.share_status == 'shared' %}
-      <div class="body">{{ c.body }}</div>
+      <div class="body prose compact">{{ c.body|md|safe }}</div>
       {% if c.author == user and c.share_status in ['offered', 'shared'] %}
         <form method="post" action="/comments/{{ c.id }}/revoke">
           <button class="ghost" type="submit">Pull comment back</button>
@@ -46,12 +47,13 @@
 <h1 class="page-title">{{ topic.title }}</h1>
 {% if topic_prompt %}<p class="lede">{{ topic_prompt }}</p>{% endif %}
 <p class="meta">
-  Begun by {{ display_for(topic.created_by) }} · {{ topic.created_at|when_tag }}
+  Begun by {{ display_for(topic.created_by) }} · {{ topic.created_at|when_soft }}
   · <span class="badge {{ topic.share_status }}">{{ topic.share_status|share_label }}</span>
   {% if topic.share_status == 'shared' and topic.accepted_at %}
-    · <span class="kept-since">opened together {{ topic.accepted_at|when_tag }}</span>
+    · <span class="kept-since">opened together {{ topic.accepted_at|when_soft }}</span>
   {% endif %}
 </p>
+<p class="meta"><a class="read-link" href="/topics/{{ topic.id }}/read">Read it through</a></p>
 
 {% if awaiting %}
   <section class="panel offer-band">
@@ -95,7 +97,7 @@
         <label for="topic-title">Title</label>
         <input id="topic-title" name="title" type="text" required maxlength="240" value="{{ topic.title }}" data-desk>
         <label for="topic-prompt">Opening note</label>
-        <textarea id="topic-prompt" name="prompt" data-desk>{{ topic.prompt }}</textarea>
+        <textarea id="topic-prompt" name="prompt" data-desk data-editor="note">{{ topic.prompt }}</textarea>
         <div class="actions">
           <button type="submit">Save changes</button>
         </div>
@@ -133,13 +135,16 @@
       <article class="writing" id="writing-{{ w.id }}">
         <div class="author-chip">
           <span class="dot{% if w.author != user %} them{% endif %}"></span>
-          {{ display_for(w.author) }} · {{ w.created_at|when_tag }}
+          {{ display_for(w.author) }} · {{ w.created_at|when_soft }}
           · <span class="badge {{ w.share_status }}">{{ w.share_status|share_label }}</span>
           {% if w.author == user or w.share_status == 'shared' %}
             {% set read = w.body|reading_time %}
             {% if read %}· <span class="reading-time">{{ read }}</span>{% endif %}
           {% endif %}
         </div>
+        {% if returned_mine.get(w.id) %}
+          <p class="meta">The other person keeps a note that it was open, not the page.</p>
+        {% endif %}
 
         {% if w.author == user or w.share_status == 'shared' %}
           <h3>{{ w.title or "Untitled writing" }}</h3>
@@ -195,7 +200,7 @@
                   <label for="edit-title-{{ w.id }}">Title</label>
                   <input id="edit-title-{{ w.id }}" name="title" type="text" value="{{ w.title }}" data-desk>
                   <label for="edit-body-{{ w.id }}">Writing</label>
-                  <textarea id="edit-body-{{ w.id }}" name="body" required data-desk>{{ w.body }}</textarea>
+                  <textarea id="edit-body-{{ w.id }}" name="body" required data-desk data-editor="writing">{{ w.body }}</textarea>
                   <div class="actions">
                     <button type="submit">Save changes</button>
                   </div>
@@ -215,7 +220,7 @@
                   <label for="rev-title-{{ w.id }}">Title</label>
                   <input id="rev-title-{{ w.id }}" name="title" type="text" value="{{ w.revision_title if w.revision_status == 'private' else w.title }}" data-desk>
                   <label for="rev-body-{{ w.id }}">Revision</label>
-                  <textarea id="rev-body-{{ w.id }}" name="body" required data-desk>{{ w.revision_body if w.revision_status == 'private' else w.body }}</textarea>
+                  <textarea id="rev-body-{{ w.id }}" name="body" required data-desk data-editor="writing">{{ w.revision_body if w.revision_status == 'private' else w.body }}</textarea>
                   <div class="actions">
                     <button type="submit">{% if w.revision_status == 'private' %}Save revision{% else %}Keep revision on my desk{% endif %}</button>
                   </div>
@@ -233,7 +238,7 @@
               <form method="post" action="/topics/{{ topic.id }}/comments" data-keep="note-{{ w.id }}">
                 <input type="hidden" name="writing_id" value="{{ w.id }}">
                 <label for="note-{{ w.id }}">Private note</label>
-                <textarea id="note-{{ w.id }}" name="body" required data-desk placeholder="Stays on your side until you send it."></textarea>
+                <textarea id="note-{{ w.id }}" name="body" required data-desk data-editor="note" placeholder="Stays on your side until you send it."></textarea>
                 <button type="submit">Keep note</button>
               </form>
             {% endif %}
@@ -279,7 +284,7 @@
         <label for="wtitle">Title</label>
         <input id="wtitle" name="title" type="text" data-desk placeholder="Optional heading">
         <label for="wbody">Writing</label>
-        <textarea id="wbody" name="body" required data-desk placeholder="Take your time. Markdown is fine."></textarea>
+        <textarea id="wbody" name="body" required data-desk data-editor="writing" placeholder="Take your time. Markdown is fine."></textarea>
         <div class="actions">
           <button type="submit">Save to my desk</button>
           <span class="chat-hint">Ctrl+Enter or ⌘+Enter saves too. Half-written pages are picked up again when you return.</span>
@@ -295,7 +300,7 @@
       {% endfor %}
       <form method="post" action="/topics/{{ topic.id }}/comments" data-keep="note-topic">
         <label for="topic-note">Private note on the topic</label>
-        <textarea id="topic-note" name="body" required data-desk placeholder="Stays with you until you send it."></textarea>
+        <textarea id="topic-note" name="body" required data-desk data-editor="note" placeholder="Stays with you until you send it."></textarea>
         <button type="submit">Keep note</button>
       </form>
     </section>
@@ -311,7 +316,7 @@
              data-topic-id="{{ topic.id }}" data-me="{{ user }}" data-display="{{ display }}">
           {% for m in topic.messages %}
             <div class="bubble{% if m.author == user %} mine{% endif %}{% if margin_grouped(m, loop.previtem) %} cont{% endif %}" data-author="{{ m.author }}" data-at="{{ m.created_at|epoch_ms }}">
-              <div class="who">{{ display_for(m.author) }} · {{ m.created_at|when_tag }}</div>
+              <div class="who">{{ display_for(m.author) }} · {{ m.created_at|when_soft }}</div>
               <div class="prose compact">{{ m.body|md|safe }}</div>
             </div>
           {% else %}
@@ -332,6 +337,7 @@
     {% endif %}
   </aside>
 </div>
+{{ returned_block(returned, other) }}
 {% endblock %}
 
 {% block scripts %}

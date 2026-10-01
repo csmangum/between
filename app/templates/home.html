@@ -18,7 +18,7 @@
           <div class="counts">
             <span class="badge offered">{{ t.share_status|share_label }}</span>
             <span>from {{ display_for(t.created_by) }}</span>
-            {% if t.offered_at %}<span>{{ t.offered_at|when_tag }}</span>{% endif %}
+            {% if t.offered_at %}<span>{{ t.offered_at|when_soft }}</span>{% endif %}
           </div>
         </a>
       {% endfor %}
@@ -44,7 +44,7 @@
                 {% else %}
                   <span>no writings yet</span>
                 {% endif %}
-                <span>{{ t.updated_at|when_tag }}</span>
+                <span>{{ t.updated_at|when_soft }}</span>
               </div>
             </a>
           {% endfor %}
@@ -63,14 +63,14 @@
             <p class="prompt">{{ latest.excerpt }}</p>
             <div class="counts">
               <span>{{ display_for(latest.author) }}</span>
-              <span>{{ latest.at|when_tag }}</span>
+              <span>{{ latest.at|when_soft }}</span>
               <span>{{ latest.topic_title }}</span>
             </div>
           {% elif table_topic %}
             {% if table_topic.prompt %}<p class="prompt">{{ table_topic.prompt }}</p>{% endif %}
             <div class="counts">
               <span>{{ table_topic.title }}</span>
-              {% if table_topic.accepted_at %}<span>opened {{ table_topic.accepted_at|when_tag }}</span>{% endif %}
+              {% if table_topic.accepted_at %}<span>opened {{ table_topic.accepted_at|when_soft }}</span>{% endif %}
             </div>
           {% endif %}
           <div class="counts">
