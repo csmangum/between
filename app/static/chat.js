@@ -82,6 +82,59 @@
     return bubbles.length ? bubbles[bubbles.length - 1] : null;
   }
 
+  const SAFE_MARKDOWN_TAGS = new Set([
+    "A", "ABBR", "BLOCKQUOTE", "BR", "CODE", "DD", "DIV", "DL", "DT", "EM", "H1", "H2", "H3", "H4",
+    "HR", "LI", "OL", "P", "PRE", "SUB", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL",
+    "STRONG",
+  ]);
+  const BLOCKED_MARKUP_TAGS = new Set(["IFRAME", "MATH", "OBJECT", "SCRIPT", "STYLE", "SVG", "TEMPLATE"]);
+
+  function appendSafeMarkup(target, markup) {
+    const parsed = new DOMParser().parseFromString(markup, "text/html");
+    const copyNode = (parent, node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        parent.append(document.createTextNode(node.textContent || ""));
+        return;
+      }
+      if (!(node instanceof HTMLElement)) return;
+      if (BLOCKED_MARKUP_TAGS.has(node.tagName)) return;
+      if (!SAFE_MARKDOWN_TAGS.has(node.tagName)) {
+        node.childNodes.forEach((child) => copyNode(parent, child));
+        return;
+      }
+
+      const copy = document.createElement(node.tagName.toLowerCase());
+      if (node.tagName === "A") {
+        const href = node.getAttribute("href");
+        if (href) {
+          try {
+            const url = new URL(href, location.href);
+            if (["http:", "https:", "mailto:"].includes(url.protocol)) {
+              copy.setAttribute("href", url.href);
+              if (url.protocol !== "mailto:" && url.origin !== location.origin) {
+                copy.setAttribute("target", "_blank");
+                copy.setAttribute("rel", "noopener noreferrer");
+              }
+            }
+          } catch (_) {
+            /* Ignore malformed links. */
+          }
+        }
+        const title = node.getAttribute("title");
+        if (title) copy.setAttribute("title", title);
+      } else if (node.tagName === "ABBR") {
+        const title = node.getAttribute("title");
+        if (title) copy.setAttribute("title", title);
+      } else if (["LI", "SUP"].includes(node.tagName)) {
+        const id = node.getAttribute("id");
+        if (id && /^fn(ref)?:[A-Za-z0-9_.:-]+$/.test(id)) copy.id = id;
+      }
+      node.childNodes.forEach((child) => copyNode(copy, child));
+      parent.append(copy);
+    };
+    parsed.body.childNodes.forEach((node) => copyNode(target, node));
+  }
+
   function setTimestamp(element, msg) {
     element.textContent = "";
     element.append(`${msg.display} · `);
@@ -114,7 +167,7 @@
     setTimestamp(who, msg);
     const body = document.createElement("div");
     body.className = "prose compact";
-    if (typeof msg.html === "string") body.innerHTML = msg.html;
+    if (typeof msg.html === "string") appendSafeMarkup(body, msg.html);
     else body.textContent = msg.body;
     el.append(who, body);
     log.appendChild(el);
