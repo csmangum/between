@@ -22,6 +22,7 @@ os.environ["USER2_DISPLAY"] = "Friend"
 os.environ["USER2_PASSWORD"] = "pass2"
 
 from app.db import Base, engine, get_db  # noqa: E402
+from app.events import stream  # noqa: E402
 from app.hub import hub  # noqa: E402
 from app.main import app  # noqa: E402
 from app.markdown_render import clear_markdown_cache  # noqa: E402
@@ -54,6 +55,7 @@ def reset_state():
         shutil.rmtree(TEST_ROOT / name, ignore_errors=True)
     yield
     hub.rooms.clear()
+    stream.close_all()
 
 
 @pytest.fixture()

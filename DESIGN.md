@@ -166,6 +166,10 @@ Shared objects are both.
 
 Home listings use visibility. Bodies, archive, and export use openness.
 
+### What a return leaves behind
+
+When something that was **open between you** returns to its author's desk — a topic, a writing, or a note, whether by revoke or because its topic folded — the person who had it open keeps a **line, not the page**: what it was called, who wrote it, who returned it, when it was opened and when it was returned. Nothing that was never opened leaves anything: a sealed offer declined or pulled back was not yet part of the record. Opening the same thing again clears its line, because the live page then tells the truth. The line is a snapshot in its own table, so it outlives the original being edited or removed.
+
 ---
 
 ## 8. Visibility matrix
@@ -180,6 +184,7 @@ For person B, looking at an object authored by A:
 | Comment body | absent, or sealed if offered | sealed + Agree | shown |
 | Chat | closed | closed | live + history |
 | Archive / export | omitted | omitted | included |
+| After a return | — | nothing kept | a line: title, dates, who returned it |
 
 Author A always sees their own bodies, including after offer and after share.
 
@@ -219,7 +224,11 @@ Both people see the prompt. Writings appear according to each writing’s own st
 
 ### Archive
 
-The readable record: author’s own pages plus anything in `shared`. Export Markdown and JSON use the same filter. Sealed offers are not in the export. That is deliberate — an unread letter is not yet part of the collected conversation.
+The readable record: author’s own pages plus anything in `shared`. Export Markdown and JSON use the same filter. Sealed offers are not in the export. That is deliberate — an unread letter is not yet part of the collected conversation. What was open and then returned appears as a line under its topic, or in a closing band for topics that are no longer open to you at all.
+
+### The one badge
+
+The only notification is the **Waiting** badge in the header, counting sealed topics. It is kept truthful without a reload by one quiet stream per person (`GET /events`): the count on connect, and a word when the other person offers, opens, leaves unopened, or returns something. If that something is the page you are looking at, one line appears at the top with a button to reload; on the desk, only a new sealed offer earns that line. The margin never notifies — a message in the margin is a conversation, not a letter — and nothing is stored or listed.
 
 ---
 
@@ -253,6 +262,7 @@ The markdown split (`local/` vs `shared/`) exists so the intended boundary is vi
 - FastAPI + Jinja + one SQLite file
 - Session cookie auth, two hard-coded people
 - WebSocket `/ws/topics/{id}` for chat, accepted only when the topic is `shared`
+- Server-sent events at `/events`, one stream per signed-in person, carrying only the sealed count and which topic the other person just acted on. Like the chat hub it lives in the process: run one worker.
 - Docker Compose for hosting; `run.sh` for a laptop
 - No analytics, no email. Fonts are served from the app itself, so a visit is reported to nobody.
 - One optional third party: the drafting model at `AGENT_BASE_URL`. It is off unless a key is set **and both people have allowed it from their desk**. When someone asks for a draft, what that person can already read on the topic — including the other person's opened pages and recent margin lines — is sent to that provider. Private pages never are. Either person can withdraw at any time and the button disappears for both.
@@ -270,6 +280,8 @@ In scope for v1:
 - Export filtered the same way as the archive
 - Markdown sanitized on render (nh3 allowlist; no images, links open away with `noopener noreferrer`). The renderer adds smart typography, footnotes, definition lists and abbreviations; the only `id` and `class` values that survive are the ones footnotes need, so a page cannot borrow the room's own styles or anchors
 - `POST /preview` renders a draft for the signed-in writer with that same renderer and stores nothing. It only ever receives text the browser already holds, and only sends it to this server
+- `GET /events` tells a person nothing they could not learn by reloading: a sealed count and a topic id with one of four words. It carries no titles, no bodies and nothing from the margin. Unauthenticated requests get a plain 401 so the browser stops asking
+- A returned page's line holds a title the other person had already read, and dates. It never holds a body, and it is shown only to the person who lost access
 - The process refuses to start with a missing or sample `SECRET_KEY`, or with sample passwords. `BETWEEN_DEV=1` relaxes only the key, for a laptop.
 - Passwords are stored as scrypt hashes (`USERn_PASSWORD_HASH`, from `python -m app.auth`). A plaintext `USERn_PASSWORD` still works and is hashed in memory at start.
 - Login is throttled per address and per name with exponential backoff after three misses; every miss is logged.
@@ -347,6 +359,8 @@ B’s words are B’s. The topic stays reachable to B (listed on B’s desk as *
 | Table, archive, exports | `app/routes/archive.py` |
 | Live margin socket | `app/routes/chat.py` |
 | Markdown to sanitized HTML, and `POST /preview` | `app/markdown_render.py`, `app/routes/preview.py` |
+| The line a return leaves: `Withdrawal`, `share.withdrawal`, `share.fold_topic` | `app/models.py`, `app/share.py` |
+| One stream per person: `events.tell`, `GET /events` | `app/events.py`, `app/routes/events.py` |
 | Chat presence hub | `app/hub.py` |
 | Schema add-ons | `app/db.py` `migrate()` |
 | Desk / consent / topic UI | `app/templates/` |
@@ -384,8 +398,8 @@ These are unresolved on purpose. The first draft should not fake answers.
 **1. Does an edit to a shared writing need a new accept?**
 Today, edit-in-place is not built. When it is, two honest options: (a) edits flow into the already-shared object, or (b) an edit reverts the writing to `offered`. (a) is how letters get postscripts. (b) is how you prevent bait-and-switch. We should pick with the two users, not by defaulting to “sync.”
 
-**2. What does revoke mean after reading?**
-Access ends. Memory does not. Should the archive keep a “was shared, then withdrawn” stub so the history of the relationship is honest? v1 just hides. That may be too clean.
+**2. What does revoke mean after reading?** *(answered)*
+Access ends. Memory does not. The archive now keeps a line — title, dates, who returned it — for anything that was open and then returned, and nothing for what was never opened. See §7, *What a return leaves behind*. Still open inside it: whether the line should also name how long the page was open, and whether the author should be able to ask for the line to go too (today they cannot).
 
 **3. Should offered titles be blankable?**
 A title can leak. An option to offer as “A writing” with no title would be stricter.
@@ -396,8 +410,8 @@ The honest next architecture is: each person runs an instance (or a folder of ma
 **5. Chat after revoke of a topic.**
 If a topic returns to private, the chat history is still in SQLite. Who may export it? v1: only while the topic is shared, export includes chat. After revoke, counterpart export drops it. Author still has the db. This is inconsistent in spirit with “the record is the point.” Needs a rule.
 
-**6. Notifications.**
-Without them, an offer can sit unseen. With them, the app starts to feel like a messenger. Maybe a single quiet badge on home is enough.
+**6. Notifications.** *(answered)*
+A single quiet badge is enough — so long as it is true. The badge now follows a per-person stream instead of waiting for a reload, and the page you are on says in one line when the other person acted on it. Nothing from the margin, no list, no sound. See §9, *The one badge*. If the two people ever want more than that, it should be asked for, not assumed.
 
 **7. Third surfaces.**
 A future “read together” mode — both looking at a shared writing, commenting in the margin in real time — should still not punch a hole in private desks.
@@ -407,13 +421,11 @@ A future “read together” mode — both looking at a shared writing, commenti
 ## 17. Roadmap
 
 **Now (this draft, running)**
-Two users, three grains of consent, local markdown mirrors, shared chat after topic accept with presence and typing, archive/export of readable objects, an optional agent that drafts a private reply from the readable record only.
+Two users, three grains of consent, local markdown mirrors, shared chat after topic accept with presence and typing, archive/export of readable objects with a line for anything returned after it was opened, one live badge for sealed offers, an optional agent that drafts a private reply from the readable record only.
 
 **Next, still small**
 - Edit writings with an explicit rule from question 1
-- Withdrawal stub in the archive
 - Offer without a revealing title
-- Basic “you have N sealed offers” on home (already partly there)
 - Backup script for `data/`
 
 **Later, only if the two people need it**

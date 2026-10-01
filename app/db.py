@@ -4,6 +4,7 @@ import os
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -50,11 +51,13 @@ def migrate() -> None:
 
     extras = {
         "topics": [
+            ("source_id", "VARCHAR(36)"),
             ("share_status", "VARCHAR(20) DEFAULT 'private'"),
             ("offered_at", "DATETIME"),
             ("accepted_at", "DATETIME"),
         ],
         "writings": [
+            ("source_id", "VARCHAR(36)"),
             ("share_status", "VARCHAR(20) DEFAULT 'private'"),
             ("offered_at", "DATETIME"),
             ("accepted_at", "DATETIME"),
@@ -64,9 +67,13 @@ def migrate() -> None:
             ("revision_offered_at", "DATETIME"),
         ],
         "comments": [
+            ("source_id", "VARCHAR(36)"),
             ("share_status", "VARCHAR(20) DEFAULT 'private'"),
             ("offered_at", "DATETIME"),
             ("accepted_at", "DATETIME"),
+        ],
+        "withdrawals": [
+            ("source_id", "VARCHAR(36)"),
         ],
     }
     indexes = [
@@ -88,6 +95,41 @@ def migrate() -> None:
             for name, spec in cols:
                 if name not in have:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {spec}"))
+            if "source_id" in {name for name, _ in cols}:
+                rows = conn.execute(text(f"SELECT rowid FROM {table} WHERE source_id IS NULL")).fetchall()
+                for (rowid,) in rows:
+                    conn.execute(
+                        text(f"UPDATE {table} SET source_id = :source_id WHERE rowid = :rowid"),
+                        {"source_id": str(uuid4()), "rowid": rowid},
+                    )
+        if conn.execute(text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'withdrawals'")).fetchone():
+            conn.execute(
+                text(
+                    "UPDATE withdrawals SET source_id = "
+                    "(SELECT source_id FROM topics WHERE withdrawals.kind = 'topic' "
+                    "AND topics.id = withdrawals.object_id) "
+                    "WHERE kind = 'topic' AND EXISTS "
+                    "(SELECT 1 FROM topics WHERE topics.id = withdrawals.object_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "UPDATE withdrawals SET source_id = "
+                    "(SELECT source_id FROM writings WHERE withdrawals.kind = 'writing' "
+                    "AND writings.id = withdrawals.object_id) "
+                    "WHERE kind = 'writing' AND EXISTS "
+                    "(SELECT 1 FROM writings WHERE writings.id = withdrawals.object_id)"
+                )
+            )
+            conn.execute(
+                text(
+                    "UPDATE withdrawals SET source_id = "
+                    "(SELECT source_id FROM comments WHERE withdrawals.kind = 'comment' "
+                    "AND comments.id = withdrawals.object_id) "
+                    "WHERE kind = 'comment' AND EXISTS "
+                    "(SELECT 1 FROM comments WHERE comments.id = withdrawals.object_id)"
+                )
+            )
         have_indexes: set[str] = set()
         for table in ("topics", "writings", "comments", "chat_messages"):
             have_indexes.update(row[1] for row in conn.execute(text(f"PRAGMA index_list('{table}')")).fetchall())

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
-from .. import access, share, store
+from .. import access, events, share, store
 from ..db import get_db
 from ..markdown_render import clear_markdown_cache
 from ..models import Comment, Topic, Writing, utcnow
@@ -72,6 +72,7 @@ def offer_comment(request: Request, comment_id: int, db: Session = Depends(get_d
         share.set_status(comment, "offered")
         comment.topic.updated_at = utcnow()
         db.commit()
+        events.tell(db, user, "sealed", comment.topic_id)
         flash(request, "Comment sealed for them.")
     return RedirectResponse(_anchor(comment), status_code=303)
 
@@ -86,9 +87,11 @@ def accept_comment(request: Request, comment_id: int, db: Session = Depends(get_
         if comment.topic.share_status != "shared":
             return RedirectResponse(_anchor(comment), status_code=303)
         share.set_status(comment, "shared")
+        share.clear_withdrawals(db, "comment", comment.source_id)
         comment.topic.updated_at = utcnow()
         db.commit()
         store.write_shared(comment.topic, comment=comment)
+        events.tell(db, user, "opened", comment.topic_id)
         flash(request, "Comment opened.")
     return RedirectResponse(_anchor(comment), status_code=303)
 
@@ -107,6 +110,7 @@ def decline_comment(request: Request, comment_id: int, db: Session = Depends(get
         db.commit()
         store.remove_shared(comment.topic, comment=comment)
         store.write_local(comment.topic, comment=comment)
+        events.tell(db, user, "unopened", comment.topic_id)
         flash(request, "Left unopened. Back on their side.")
     return RedirectResponse(_anchor(comment), status_code=303)
 
@@ -118,12 +122,16 @@ def revoke_comment(request: Request, comment_id: int, db: Session = Depends(get_
     if not comment:
         return RedirectResponse("/", status_code=303)
     if comment.author == user and comment.share_status in {"offered", "shared"}:
+        stub = share.withdrawal("comment", comment, user)
         share.set_status(comment, "private")
         comment.topic.updated_at = utcnow()
+        if stub:
+            db.add(stub)
         db.commit()
         store.remove_shared(comment.topic, comment=comment)
         store.write_local(comment.topic, comment=comment)
-        flash(request, "Comment pulled back.")
+        events.tell(db, user, "returned", comment.topic_id)
+        flash(request, "Comment pulled back." + (" They keep a note that it was open." if stub else ""))
     return RedirectResponse(_anchor(comment), status_code=303)
 
 

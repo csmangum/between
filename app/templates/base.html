@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/static/fonts.css">
   <link rel="stylesheet" href="/static/app.css">
 </head>
-<body data-user="{{ user or '' }}">
+<body data-user="{{ user or '' }}"{% if user %} data-me="{{ user }}" data-other="{{ other }}"{% endif %}>
   <a class="skip" href="#content">Skip to the page</a>
   <div class="wrap">
     <header class="topbar">

@@ -86,6 +86,80 @@
     if (field.form) field.form.requestSubmit();
   });
 
+  // --- One quiet stream: the badge stays true, and the page you are on says when it changed. ---
+  const me = document.body.dataset.me;
+  if (me && "EventSource" in window) {
+    const other = document.body.dataset.other || "They";
+    const NOTICES = {
+      sealed: `${other} sent something here.`,
+      opened: `${other} opened what you sent.`,
+      unopened: `${other} left it unopened for now.`,
+      returned: `${other} returned something to their desk.`,
+    };
+
+    const setSealed = (count) => {
+      const nav = document.querySelector(".nav");
+      if (!nav) return;
+      let badge = nav.querySelector(".nav-badge");
+      if (!count) {
+        if (badge) badge.remove();
+        return;
+      }
+      if (!badge) {
+        badge = document.createElement("a");
+        badge.className = "nav-badge";
+        badge.href = "/#incoming";
+        badge.append("Waiting ");
+        const number = document.createElement("span");
+        number.className = "count";
+        badge.append(number);
+        const desk = nav.querySelector('a[href="/"]');
+        if (desk) desk.insertAdjacentElement("afterend", badge);
+        else nav.prepend(badge);
+      }
+      badge.querySelector(".count").textContent = String(count);
+    };
+
+    const notice = (text) => {
+      const main = document.getElementById("content");
+      if (!main) return;
+      let line = main.querySelector(".room-notice");
+      if (!line) {
+        line = document.createElement("p");
+        line.className = "room-notice";
+        line.setAttribute("role", "status");
+        main.prepend(line);
+      }
+      line.textContent = "";
+      line.append(`${text} `);
+      const see = document.createElement("button");
+      see.type = "button";
+      see.className = "link";
+      see.textContent = "See it";
+      see.addEventListener("click", () => window.location.reload());
+      line.append(see);
+    };
+
+    const here = window.location.pathname.match(/^\/topics\/(\d+)/);
+    const source = new EventSource("/events");
+    source.addEventListener("message", (event) => {
+      let payload;
+      try {
+        payload = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (typeof payload.sealed === "number") setSealed(payload.sealed);
+      if (payload.type === "close") {
+        source.close();
+        return;
+      }
+      if (payload.type !== "topic") return;
+      if (here && Number(here[1]) === payload.topic) notice(NOTICES[payload.what] || "Something changed here.");
+      else if (window.location.pathname === "/" && payload.what === "sealed") notice("Something new is waiting for you.");
+    });
+  }
+
   // --- Drafts: what is typed on the desk stays in this browser until the server has kept it. --
   const LEGACY_DRAFT_PREFIX = "between:draft:v1:";
   const DRAFT_PREFIX = `between:draft:v2:${encodeURIComponent(document.body.dataset.user || "anonymous")}:`;

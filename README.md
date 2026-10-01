@@ -79,7 +79,7 @@ Pages are Markdown. The desk gives you a toolbar and shortcuts (Ctrl/⌘+B, I, K
 
 Beyond the usual Markdown, the room renders straight quotes and dashes as typographer's quotes and dashes, footnotes (`[^1]` … `[^1]: the note`), definition lists (a term, then a line starting with `: `), and abbreviations (`*[HTML]: HyperText Markup Language`). Images are reduced to their alt text; links open in a new tab.
 
-Archive and export only include what *you* are allowed to read: your private pages plus anything both of you accepted.
+Archive and export only include what *you* are allowed to read: your private pages plus anything both of you accepted. If something you had opened is returned to the other person's desk, you keep a line — its title, when it was opened, when it was returned — never the page. Nothing is kept for an offer that was never opened.
 
 ## What the other person can see before opening
 
@@ -88,6 +88,8 @@ The title of a sealed topic or writing, a count of sealed offers waiting, and �
 ## Presence and drafts
 
 On a shared topic, the live margin shows who is in the room and who is typing.
+
+The only notification is the **Waiting** badge in the header. It updates on its own, and the page you are looking at says in one line when the other person offers, opens, leaves unopened or returns something there. The margin never notifies.
 
 **Draft a reply** is optional and off by default. It needs a model key in `.env` **and** both people to allow it from their desk. When someone asks for a draft, what that person can already read on the topic — including the other person's opened pages and recent margin lines — is sent to the configured provider. Private pages never are. Either person can withdraw at any time.
 

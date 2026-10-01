@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
-from .. import access, share, store
+from .. import access, events, share, store
 from ..db import get_db
 from ..markdown_render import clear_markdown_cache
 from ..models import Topic, Writing, utcnow
@@ -61,6 +61,7 @@ def offer_writing(request: Request, writing_id: int, db: Session = Depends(get_d
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_local(writing.topic, writing)
+        events.tell(db, user, "sealed", writing.topic_id)
         flash(request, f"Writing sealed for {other_display(user)}.")
     return RedirectResponse(_anchor(writing), status_code=303)
 
@@ -75,9 +76,11 @@ def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_
         if writing.topic.share_status != "shared":
             return RedirectResponse(_anchor(writing), status_code=303)
         share.set_status(writing, "shared")
+        share.clear_withdrawals(db, "writing", writing.source_id)
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_shared(writing.topic, writing)
+        events.tell(db, user, "opened", writing.topic_id)
         flash(request, "Opened. This writing is kept between you.")
     return RedirectResponse(_anchor(writing), status_code=303)
 
@@ -96,6 +99,7 @@ def decline_writing(request: Request, writing_id: int, db: Session = Depends(get
         db.commit()
         store.remove_shared(writing.topic, writing)
         store.write_local(writing.topic, writing)
+        events.tell(db, user, "unopened", writing.topic_id)
         flash(request, "Left unopened. Back on their desk.")
     return RedirectResponse(f"/topics/{writing.topic_id}", status_code=303)
 
@@ -107,15 +111,23 @@ def revoke_writing(request: Request, writing_id: int, db: Session = Depends(get_
     if not writing:
         return RedirectResponse("/", status_code=303)
     if writing.author == user and writing.share_status in {"offered", "shared"}:
+        stub = share.withdrawal("writing", writing, user)
         share.fold_revision_into_private(writing)
         share.set_status(writing, "private")
         writing.topic.updated_at = utcnow()
+        if stub:
+            db.add(stub)
         db.commit()
         store.remove_shared(writing.topic, writing)
         store.write_local(writing.topic, writing)
         store.write_revision(writing)
         clear_markdown_cache()
-        flash(request, "Pulled back to your desk.")
+        events.tell(db, user, "returned", writing.topic_id)
+        if stub:
+            other = other_display(user)
+            flash(request, f"Pulled back to your desk. {other} keeps a note that it was open, not the page.")
+        else:
+            flash(request, "Pulled back to your desk.")
     return RedirectResponse(_anchor(writing), status_code=303)
 
 
@@ -230,6 +242,7 @@ def offer_writing_revision(request: Request, writing_id: int, db: Session = Depe
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_revision(writing)
+        events.tell(db, user, "sealed", writing.topic_id)
         flash(
             request,
             f"Revision sealed for {other_display(user)}. The writing they opened stays until they open this.",
@@ -256,6 +269,7 @@ def accept_writing_revision(request: Request, writing_id: int, db: Session = Dep
         store.write_local(writing.topic, writing)
         store.write_revision(writing)
         clear_markdown_cache()
+        events.tell(db, user, "opened", writing.topic_id)
         flash(request, "Opened. This revision is now the writing you keep.")
     return RedirectResponse(_anchor(writing), status_code=303)
 
@@ -271,6 +285,7 @@ def decline_writing_revision(request: Request, writing_id: int, db: Session = De
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_revision(writing)
+        events.tell(db, user, "unopened", writing.topic_id)
         flash(request, "Left unopened. The revision returned to their desk. The writing you have stays.")
     return RedirectResponse(_anchor(writing), status_code=303)
 
@@ -286,6 +301,7 @@ def revoke_writing_revision(request: Request, writing_id: int, db: Session = Dep
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_revision(writing)
+        events.tell(db, user, "returned", writing.topic_id)
         flash(request, "Revision pulled back. They still have the writing they opened.")
     return RedirectResponse(_anchor(writing), status_code=303)
 

@@ -243,7 +243,7 @@ def test_topic_revoke_returns_everything_to_its_author(db_session: Session):
     assert b_page.status_code == 200
     assert "b-own-body" in b_page.text and "a-shared-body" not in b_page.text
     assert "creator-only-opening" not in b_page.text
-    assert "pulled this topic back" in b_page.text
+    assert "returned it to their desk" in b_page.text
 
     # B's desk, archive and exports keep their own pages but not the creator's prompt.
     desk = b.get("/")
