@@ -201,10 +201,29 @@ Creating a topic is labeled “Keep on my desk,” not “Create” or “Publis
 
 - Badge: private / offered / shared
 - Actions: Offer to *Name* / Pull it back / Make private again
-- Each writing has the same badge and actions
+- Each writing has the same badge and actions, and says how long it asks of its reader
+- Three or more writings earn a short contents list at the top of the column. A sealed page is listed by its title only, marked *sealed*; a private page of the other person is not listed at all
 - Compose box: “Save to my desk” (Ctrl/⌘+Enter also saves)
 - While private: change the title and opening note; remove the topic, a writing, or a note. Removal asks first, and never touches words the other person wrote — a writing holding their notes stays, as does a topic holding their pages
 - Chat panel locked until the topic is shared
+
+### The writing surface
+
+Every Markdown field carries the same small set of tools, built by `desk.js` so the templates stay plain forms that work without it:
+
+- Fields grow with the words.
+- **Write / Preview.** The preview is drawn by the server (`POST /preview`) with the renderer the page itself uses, so what you see is what will be shown. Nothing is stored; the route requires a person in the room.
+- A running word count with a reading time.
+- **Write in full.** The form moves into a `<dialog>` that takes the whole screen, and moves back on Esc. It is the same form, so saving works the same way.
+- **Picked up again.** A half-written page is kept in the author's own browser storage, keyed to the signed-in name and the page, restored on return with a quiet note and a *Start over* button, and forgotten on save and on Leave. This is the author's own device holding the author's own words; it is not a copy anywhere else.
+
+### Two palettes
+
+The room is dark by default and has been since the first draft. It now also has paper. Every colour in the stylesheet is a token resolved with `light-dark()`, so one set of rules draws either palette and nothing dark can leak into the light one. The theme follows the system unless a person pins it with the round button in the top bar or on the door; the choice lives in that browser alone. A tiny synchronous script sets the theme before first paint so nothing flashes.
+
+### Time
+
+Soft times (“yesterday · 14:10”, “an hour ago”) are `<time>` elements carrying the exact moment as `datetime` and as a hover title. The page reads quietly; the record is still precise.
 
 ### Topic page (counterpart, offered topic)
 

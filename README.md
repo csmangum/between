@@ -75,9 +75,19 @@ Archive and export only include what *you* are allowed to read: your private pag
 
 The title of a sealed topic or writing, a count of sealed offers waiting, and — inside a shared topic — that you are in the margin and typing. Nothing about anything private, not even that it exists.
 
+## The room itself
+
+Two palettes: the dark room and paper. The app follows your system by default; the round button in the top bar (and on the door) pins a choice in that browser. Nothing about the choice leaves your machine.
+
+Writing fields grow with the words. Under every Markdown field there is a small toolbar: **Write / Preview** (the preview is drawn by the server with the same renderer the page uses, and nothing is stored), a running word count with a reading time, and **Write in full**, which gives the page the whole screen until you press Esc.
+
+A half-written page is kept in your own browser, for your own name, and picked up again when you come back. It is forgotten the moment you save it, or when you press Leave. It is never sent anywhere.
+
+Each writing shows how long it asks of its reader. A topic with several writings gets a short contents list. Soft times like "yesterday · 14:10" carry the exact moment on hover.
+
 ## Presence and drafts
 
-On a shared topic, the live margin shows who is in the room and who is typing.
+On a shared topic, the live margin shows who is in the room and who is typing. Lines from the same person a few minutes apart sit together under one name. If you have scrolled up when something arrives, a small pill points to it; if the tab is in the background, its title counts what came in.
 
 **Draft a reply** is optional and off by default. It needs a model key in `.env` **and** both people to allow it from their desk. When someone asks for a draft, what that person can already read on the topic — including the other person's opened pages and recent margin lines — is sent to the configured provider. Private pages never are. Either person can withdraw at any time.
 
