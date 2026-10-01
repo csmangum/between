@@ -73,6 +73,12 @@ What you are still typing is kept in your own browser's local storage until the 
 
 Times are shown on your clock, not the server's. Exports are labeled UTC.
 
+## Writing
+
+Pages are Markdown. The desk gives you a toolbar and shortcuts (Ctrl/⌘+B, I, K), continues lists and quotes when you press Enter, indents a list with Tab, counts words, and can show the page as it will be kept while you type — the preview is drawn by the server with the same renderer and nothing is stored. **Just the page** hides the rest of the room; Esc brings it back. Everything works as a plain textarea when scripts are off.
+
+Beyond the usual Markdown, the room renders straight quotes and dashes as typographer's quotes and dashes, footnotes (`[^1]` … `[^1]: the note`), definition lists (a term, then a line starting with `: `), and abbreviations (`*[HTML]: HyperText Markup Language`). Images are reduced to their alt text; links open in a new tab.
+
 Archive and export only include what *you* are allowed to read: your private pages plus anything both of you accepted.
 
 ## What the other person can see before opening
