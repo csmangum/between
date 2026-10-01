@@ -86,6 +86,123 @@
     if (field.form) field.form.requestSubmit();
   });
 
+  // --- Drafts: what is typed on the desk stays in this browser until the server has kept it. --
+  const DRAFT_PREFIX = "between:draft:v1:";
+  const DRAFT_TTL = 30 * DAY;
+  const desks = [...document.querySelectorAll("[data-desk]")].filter(
+    (field) => (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) && field.id,
+  );
+
+  function draftKey(field) {
+    return `${DRAFT_PREFIX}${location.pathname}#${field.id}`;
+  }
+
+  function readDraft(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const draft = JSON.parse(raw);
+      return draft && typeof draft.v === "string" ? draft : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  let remembers = false;
+
+  function writeDraft(key, draft) {
+    try {
+      localStorage.setItem(key, JSON.stringify(draft));
+      remembers = true;
+    } catch (_) {
+      remembers = false; // storage full or disabled: the desk still works, it just does not remember
+    }
+  }
+
+  function dropDraft(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function allDraftKeys() {
+    const keys = [];
+    try {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(DRAFT_PREFIX)) keys.push(key);
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    return keys;
+  }
+
+  function saveDraft(field) {
+    const key = draftKey(field);
+    if (field.value === field.defaultValue || field.value.trim() === "") {
+      dropDraft(key);
+      return;
+    }
+    writeDraft(key, { v: field.value, t: Date.now(), s: false });
+  }
+
+  function restoreNote(field, key) {
+    const note = document.createElement("p");
+    note.className = "draft-note";
+    note.append("Restored what you were writing here, from this browser. ");
+    const discard = document.createElement("button");
+    discard.type = "button";
+    discard.className = "link";
+    discard.textContent = "Discard it";
+    discard.addEventListener("click", () => {
+      field.value = field.defaultValue;
+      dropDraft(key);
+      note.remove();
+      field.focus();
+    });
+    note.append(discard);
+    field.insertAdjacentElement("afterend", note);
+    field.addEventListener("input", () => note.remove(), { once: true });
+  }
+
+  function housekeep() {
+    // A success flash means the form just submitted was kept; its draft has done its job.
+    const kept = Boolean(document.querySelector(".flash.ok"));
+    const now = Date.now();
+    allDraftKeys().forEach((key) => {
+      const draft = readDraft(key);
+      if (!draft || now - (draft.t || 0) > DRAFT_TTL || (kept && draft.s)) dropDraft(key);
+    });
+  }
+
+  function restoreDrafts() {
+    desks.forEach((field) => {
+      const key = draftKey(field);
+      const draft = readDraft(key);
+      if (!draft) return;
+      if (field.value !== field.defaultValue || draft.v === field.defaultValue) {
+        dropDraft(key);
+        return;
+      }
+      field.value = draft.v;
+      writeDraft(key, { ...draft, s: false });
+      const fold = field.closest("details");
+      if (fold) fold.open = true;
+      restoreNote(field, key);
+    });
+  }
+
+  const saveTimers = new Map();
+  desks.forEach((field) => {
+    field.addEventListener("input", () => {
+      clearTimeout(saveTimers.get(field));
+      saveTimers.set(field, setTimeout(() => saveDraft(field), 250));
+    });
+  });
+
   document.addEventListener(
     "submit",
     (event) => {
@@ -104,6 +221,15 @@
       form.querySelectorAll("button").forEach((button) => {
         if (button.type === "submit" || button.type === "") button.disabled = true;
       });
+      // Mark rather than drop: if the server sends us to the login page instead, the words are still here.
+      desks
+        .filter((field) => field.form === form)
+        .forEach((field) => {
+          clearTimeout(saveTimers.get(field));
+          const key = draftKey(field);
+          if (field.value === field.defaultValue || field.value.trim() === "") dropDraft(key);
+          else writeDraft(key, { v: field.value, t: Date.now(), s: true });
+        });
     },
     false,
   );
@@ -118,15 +244,15 @@
     });
   });
 
-  const desks = document.querySelectorAll("[data-desk]");
+  housekeep();
+  restoreDrafts();
+
   if (!desks.length) return;
 
+  // Only when the browser cannot remember the draft does leaving the page risk the words.
   window.addEventListener("beforeunload", (event) => {
-    if (submitting) return;
-    const dirty = [...desks].some((field) => {
-      if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return false;
-      return field.value !== field.defaultValue && field.value.trim() !== "";
-    });
+    if (submitting || remembers) return;
+    const dirty = desks.some((field) => field.value !== field.defaultValue && field.value.trim() !== "");
     if (!dirty) return;
     event.preventDefault();
     event.returnValue = "";

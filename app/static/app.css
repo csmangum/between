@@ -868,6 +868,24 @@ button.full, .btn.full { width: 100%; margin-top: 16px; }
   font-size: 13px;
   margin: 0 0 8px;
 }
+.draft-note {
+  color: var(--faint);
+  font-size: 13px;
+  margin: 6px 0 10px;
+  animation: rise 280ms var(--ease) both;
+}
+button.link {
+  display: inline;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+button.link:hover { color: var(--ink); filter: none; }
 time[title] { cursor: help; text-decoration: none; }
 code {
   font-family: var(--mono);

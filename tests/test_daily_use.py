@@ -148,3 +148,16 @@ def test_exports_say_utc_instead_of_server_local_time(client: TestClient):
     assert topic["created_at"].endswith("+00:00")
     assert topic["writings"][0]["created_at"].endswith("+00:00")
     assert topic["comments"][0]["created_at"].endswith("+00:00")
+
+
+# --- The desk remembers ----------------------------------------------------------------------
+
+
+def test_room_script_ships_drafts_and_local_times(client: TestClient):
+    script = client.get("/static/room.js").text
+    assert "between:draft:v1:" in script
+    assert "localStorage" in script
+    assert 'querySelectorAll("time[datetime]")' in script
+    chat = client.get("/static/chat.js").text
+    assert "Between.timeElement" in chat
+    assert "msg.html" in chat
