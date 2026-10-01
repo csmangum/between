@@ -814,6 +814,7 @@ button.full, .btn.full { width: 100%; margin-top: 16px; }
 .bubble.cont .who { display: none; }
 .bubble.pending { opacity: 0.62; }
 .bubble.pending .who::after { content: " · waiting"; }
+.bubble.pending.cont .who { display: block; }
 .bubble .who {
   font-size: 11px;
   color: var(--faint);
