@@ -8,7 +8,7 @@
       · <span class="badge {{ c.share_status }}">{{ c.share_status|share_label }}</span>
     </div>
     {% if c.author == user or c.share_status == 'shared' %}
-      <div class="body">{{ c.body }}</div>
+      <div class="body prose compact">{{ c.body|md|safe }}</div>
       {% if c.author == user and c.share_status in ['offered', 'shared'] %}
         <form method="post" action="/comments/{{ c.id }}/revoke">
           <button class="ghost" type="submit">Pull comment back</button>
@@ -286,7 +286,7 @@
         {% for m in topic.messages %}
           <div class="bubble{% if m.author == user %} mine{% endif %}">
             <div class="who">{{ display_for(m.author) }} · {{ m.created_at|when_soft }}</div>
-            <div>{{ m.body }}</div>
+            <div class="prose compact">{{ m.body|md|safe }}</div>
           </div>
         {% else %}
           <p id="chat-empty" class="chat-empty">Nothing in the margin yet. A few words are enough.</p>
