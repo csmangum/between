@@ -77,7 +77,6 @@ _ALT = re.compile(r'\balt="([^"]*)"', re.IGNORECASE)
 _REL = re.compile(r'\s*rel="[^"]*"')
 _RAW_HTML_TAG = re.compile(r"""<[A-Za-z][A-Za-z0-9:-]*(?:[^<>"']|"[^"]*"|'[^']*')*>""")
 _HTML_ATTRIBUTE = re.compile(r"""(?P<space>\s+)(?P<name>[^\s=/>]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s/>]+))?""")
-_FOOTNOTE = re.compile(r"\[\^[^\]]+\]")
 
 
 def _strip_authored_attributes(html: str) -> str:
@@ -167,7 +166,7 @@ def _render_cached(digest: str, text: str) -> str:
 def render_markdown(text: str | None, *, cache: bool = True) -> str:
     """`cache=False` is for previews of text still being typed, so they do not crowd out kept pages."""
     body = text or ""
-    if not cache or _FOOTNOTE.search(body):
+    if not cache or "[^" in body:
         return _render(body)
     digest = hashlib.sha256(body.encode("utf-8", errors="ignore")).hexdigest()
     return _render_cached(digest, body)
