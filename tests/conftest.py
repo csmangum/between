@@ -26,10 +26,12 @@ from app.events import stream  # noqa: E402
 from app.hub import hub  # noqa: E402
 from app.main import app  # noqa: E402
 from app.markdown_render import clear_markdown_cache  # noqa: E402
+from app.search import ensure_index  # noqa: E402
 from app.throttle import login_throttle  # noqa: E402
 
 TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base.metadata.create_all(bind=engine)
+ensure_index(engine)
 
 
 def _override_db():

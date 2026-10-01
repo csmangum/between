@@ -226,6 +226,14 @@ Both people see the prompt. Writings appear according to each writing’s own st
 
 The readable record: author’s own pages plus anything in `shared`. Export Markdown and JSON use the same filter. Sealed offers are not in the export. That is deliberate — an unread letter is not yet part of the collected conversation. What was open and then returned appears as a line under its topic, or in a closing band for topics that are no longer open to you at all.
 
+### Find
+
+One field on the archive, and a page of its own at `/search`. It answers from an FTS5 index over topics, pages, notes and margin lines, which SQLite keeps in step itself through triggers, so no write path can forget it. What is typed becomes a list of quoted prefix terms — the first letters of a word are enough, and nothing a person types can produce an error. Who may see a hit is decided after the index answers, object by object, through `access`, with the archive’s rule: openness, never visibility. A sealed page, a private note on the other desk, the prompt of a topic you only contributed to, a margin line from a topic that has since returned — none of them appear, whatever word is typed, and the page does not say that something hidden matched. Each hit is an escaped excerpt with the word marked, and leads into the reading view at the exact page, note or margin line.
+
+### Reading
+
+Each topic you may open also has a page to be read rather than worked on, at `/topics/{id}/read`. Everything open to you, in the order it was written: pages with their notes beneath them, loose notes between the pages where they fell, a contents list when there is more than one page, a word count and a reading time, the margin at the end while the topic is shared, and the lines for anything that returned. There is nothing to press. Sealed things are counted in one sentence that points back to the topic page, where opening happens. Earlier and later links walk through what you keep in the order the topics began. It prints as a plain document.
+
 ### The one badge
 
 The only notification is the **Waiting** badge in the header, counting sealed topics. It is kept truthful without a reload by one quiet stream per person (`GET /events`): the count on connect, and a word when the other person offers, opens, leaves unopened, or returns something. If that something is the page you are looking at, one line appears at the top with a button to reload; on the desk, only a new sealed offer earns that line. The margin never notifies — a message in the margin is a conversation, not a letter — and nothing is stored or listed.
@@ -357,6 +365,8 @@ B’s words are B’s. The topic stays reachable to B (listed on B’s desk as *
 | Writings and revisions | `app/routes/writings.py` |
 | Notes | `app/routes/comments.py` |
 | Table, archive, exports | `app/routes/archive.py` |
+| Find: the FTS5 index and its triggers, the safe query, access-filtered hits; `GET /search` | `app/search.py`, `app/routes/search.py` |
+| Reading view: pieces in order, contents, words and minutes, neighbours; `GET /topics/{id}/read` | `app/reading.py`, `app/routes/reading.py` |
 | Live margin socket | `app/routes/chat.py` |
 | Markdown to sanitized HTML, and `POST /preview` | `app/markdown_render.py`, `app/routes/preview.py` |
 | The line a return leaves: `Withdrawal`, `share.withdrawal`, `share.fold_topic` | `app/models.py`, `app/share.py` |
@@ -421,7 +431,7 @@ A future “read together” mode — both looking at a shared writing, commenti
 ## 17. Roadmap
 
 **Now (this draft, running)**
-Two users, three grains of consent, local markdown mirrors, shared chat after topic accept with presence and typing, archive/export of readable objects with a line for anything returned after it was opened, one live badge for sealed offers, an optional agent that drafts a private reply from the readable record only.
+Two users, three grains of consent, local markdown mirrors, shared chat after topic accept with presence and typing, archive/export of readable objects with a line for anything returned after it was opened, full-text search over the same readable record and a reading view for each topic, one live badge for sealed offers, an optional agent that drafts a private reply from the readable record only.
 
 **Next, still small**
 - Edit writings with an explicit rule from question 1

@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_returned.html" import block as returned_block %}
+{% block title %}{{ topic.title }} · Reading · {{ app_name }}{% endblock %}
+{% block body %}
+{% macro note_line(c) %}
+  <div class="reading-note" id="note-{{ c.id }}">
+    <p class="meta">{{ display_for(c.author) }} · {{ c.created_at|when_soft }}</p>
+    <div class="prose compact">{{ c.body|md|safe }}</div>
+  </div>
+{% endmacro %}
+
+<p class="meta reading-crumbs"><a href="/topics/{{ topic.id }}">← Topic</a> · <a href="/archive">Kept</a></p>
+
+<article class="reading">
+  <header class="reading-head">
+    <p class="eyebrow">Reading</p>
+    <h1 class="page-title">{{ topic.title }}</h1>
+    {% if reading.prompt %}<p class="lede">{{ reading.prompt }}</p>{% endif %}
+    <p class="meta reading-facts">
+      Begun by {{ display_for(topic.created_by) }} · {{ topic.created_at|when_soft }}
+      {% if topic.share_status == 'shared' and topic.accepted_at %} · opened together {{ topic.accepted_at|when_soft }}{% endif %}
+      {% if reading.words %}
+        · {{ reading.pages|length|count_label("page") }} · {{ reading.words|count_label("word") }} · about {{ reading.minutes|count_label("minute") }}
+      {% endif %}
+    </p>
+  </header>
+
+  {% if reading.pages|length > 1 %}
+    <nav class="contents" aria-label="Contents">
+      <p class="meta">Contents</p>
+      <ol>
+        {% for p in reading.pages %}
+          <li><a href="#writing-{{ p.writing.id }}">{{ p.title }}</a> <span class="meta">{{ display_for(p.writing.author) }}</span></li>
+        {% endfor %}
+      </ol>
+    </nav>
+  {% endif %}
+
+  {% for piece in reading.pieces %}
+    {% if piece.kind == 'page' %}
+      {% set w = piece.writing %}
+      <section class="reading-page" id="writing-{{ w.id }}">
+        <h2>{{ piece.title }}</h2>
+        <p class="meta">{{ display_for(w.author) }} · {{ w.created_at|when_soft }}{% if w.share_status == 'shared' and w.accepted_at %} · kept {{ w.accepted_at|when_soft }}{% endif %}</p>
+        <div class="prose">{{ w.body|md|safe }}</div>
+        {% if piece.notes %}
+          <aside class="reading-notes" aria-label="Notes on this page">
+            {% for c in piece.notes %}{{ note_line(c) }}{% endfor %}
+          </aside>
+        {% endif %}
+      </section>
+    {% else %}
+      <aside class="reading-aside" aria-label="A note on the topic">
+        {{ note_line(piece.note) }}
+      </aside>
+    {% endif %}
+  {% else %}
+    <p class="empty">Nothing to read here yet. The first page is still on a desk.</p>
+  {% endfor %}
+
+  {% if reading.sealed %}
+    <p class="meta reading-sealed">{{ reading.sealed|count_label("sealed item", "sealed items") }} wait for you — <a href="/topics/{{ topic.id }}">open them on the topic page</a>; nothing opens from here.</p>
+  {% endif %}
+
+  {% if reading.margin %}
+    <section class="reading-margin" id="margin" aria-label="In the margin">
+      <p class="meta">In the margin</p>
+      {% for m in reading.margin %}
+        <div class="reading-note" id="margin-{{ m.id }}">
+          <p class="meta">{{ display_for(m.author) }} · {{ m.created_at|when_soft }}</p>
+          <div class="prose compact">{{ m.body|md|safe }}</div>
+        </div>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {{ returned_block(reading.returned, other) }}
+</article>
+
+{% if reading.previous or reading.following %}
+  <nav class="reading-nav" aria-label="Other topics you keep">
+    {% if reading.previous %}
+      <a class="reading-prev" href="/topics/{{ reading.previous.id }}/read"><span class="meta">Earlier</span>{{ reading.previous.title }}</a>
+    {% else %}<span></span>{% endif %}
+    {% if reading.following %}
+      <a class="reading-next" href="/topics/{{ reading.following.id }}/read"><span class="meta">Later</span>{{ reading.following.title }}</a>
+    {% endif %}
+  </nav>
+{% endif %}
+{% endblock %}
