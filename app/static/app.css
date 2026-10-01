@@ -1056,6 +1056,20 @@ button.quiet-danger {
 }
 button.quiet-danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 
+/* One line when the other person acts on the page you are looking at. */
+.room-notice {
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  color: var(--muted);
+  font-size: 14px;
+  animation: rise 320ms var(--ease) both;
+}
+.room-notice button.link { color: var(--accent); }
+
 /* Returned: the line that stays when a page someone had opened goes back to its author's desk. */
 .returned { margin: 6px 0 26px; }
 .returned-list {

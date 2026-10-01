@@ -142,6 +142,16 @@ def test_events_endpoint_streams_a_live_offer(db_session: Session):
     ]
 
 
+def test_pages_open_the_stream_only_for_a_signed_in_person(client: TestClient):
+    assert "data-me=" not in client.get("/login").text
+    _login(client, "chris", "pass1")
+    home = client.get("/").text
+    assert 'data-me="chris" data-other="Friend"' in home
+    script = client.get("/static/room.js").text
+    assert 'new EventSource("/events")' in script
+    assert "chat" not in script.split("One quiet stream")[1].split("Drafts:")[0]  # the margin is not a notification
+
+
 # --- what gets told, and to whom --------------------------------------------------------------
 
 
