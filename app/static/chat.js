@@ -14,6 +14,7 @@
   if (!config.topicId || !config.me) return;
 
   const maxLength = 4000;
+  const groupWindowMs = 5 * 60 * 1000;
   const proto = location.protocol === "https:" ? "wss" : "ws";
   const baseTitle = document.title;
   let ws = null;
@@ -85,10 +86,18 @@
     const mine = msg.author === config.me;
     const wasNearBottom = nearBottom();
     const previous = lastBubble();
+    const now = Date.now();
     const el = document.createElement("div");
     el.className = "bubble" + (mine ? " mine" : "");
     el.dataset.author = msg.author;
-    if (previous && previous.dataset.author === msg.author) el.classList.add("cont");
+    el.dataset.at = String(now);
+    if (
+      previous &&
+      previous.dataset.author === msg.author &&
+      now - Number(previous.dataset.at || 0) < groupWindowMs
+    ) {
+      el.classList.add("cont");
+    }
     if (pendingMessage) el.classList.add("pending");
     const who = document.createElement("div");
     who.className = "who";

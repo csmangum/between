@@ -191,6 +191,24 @@ def when_tag(value: datetime | None) -> Markup:
     )
 
 
+def epoch_ms(value: datetime | None) -> int:
+    if not value:
+        return 0
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return int(value.timestamp() * 1000)
+
+
+MARGIN_GROUP_SECONDS = 300
+
+
+def margin_grouped(message: ChatMessage, previous: ChatMessage | None) -> bool:
+    """A line joins the one before it when the same person wrote both within a few minutes."""
+    if not previous or previous.author != message.author:
+        return False
+    return (epoch_ms(message.created_at) - epoch_ms(previous.created_at)) < MARGIN_GROUP_SECONDS * 1000
+
+
 def count_label(n: int, singular: str, plural: str | None = None) -> str:
     number = int(n or 0)
     word = singular if number == 1 else (plural or f"{singular}s")
@@ -221,6 +239,8 @@ templates.env.filters["when_tag"] = when_tag
 templates.env.filters["count_label"] = count_label
 templates.env.filters["reading_time"] = reading_time
 templates.env.filters["word_count"] = word_count
+templates.env.filters["epoch_ms"] = epoch_ms
+templates.env.globals["margin_grouped"] = margin_grouped
 templates.env.filters["share_label"] = share.label
 templates.env.globals["app_name"] = APP_NAME
 templates.env.globals["display_for"] = auth.display_for

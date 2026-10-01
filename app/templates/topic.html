@@ -310,7 +310,7 @@
         <div id="chat-log" class="chat-log" role="log" aria-relevant="additions" aria-label="Live margin"
              data-topic-id="{{ topic.id }}" data-me="{{ user }}" data-display="{{ display }}">
           {% for m in topic.messages %}
-            <div class="bubble{% if m.author == user %} mine{% endif %}{% if loop.previtem and loop.previtem.author == m.author %} cont{% endif %}" data-author="{{ m.author }}">
+            <div class="bubble{% if m.author == user %} mine{% endif %}{% if margin_grouped(m, loop.previtem) %} cont{% endif %}" data-author="{{ m.author }}" data-at="{{ m.created_at|epoch_ms }}">
               <div class="who">{{ display_for(m.author) }} · {{ m.created_at|when_tag }}</div>
               <div>{{ m.body }}</div>
             </div>

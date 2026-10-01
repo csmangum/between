@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -202,20 +202,24 @@ def test_contents_list_shows_only_titles_of_sealed_pages():
     assert f"#writing-{private}" not in page
 
 
-def test_margin_lines_from_the_same_person_group_together(db_session):
+def test_margin_lines_from_the_same_person_group_together_when_close_in_time(db_session):
     a, b = _pair()
     topic_id = _shared_topic(a, b)
     topic = db_session.get(Topic, topic_id)
-    db_session.add(ChatMessage(topic_id=topic.id, author="chris", body="first-line"))
-    db_session.add(ChatMessage(topic_id=topic.id, author="chris", body="second-line"))
-    db_session.add(ChatMessage(topic_id=topic.id, author="friend", body="third-line"))
+    now = datetime.now(timezone.utc)
+    db_session.add(ChatMessage(topic_id=topic.id, author="chris", body="first-line", created_at=now - timedelta(hours=2)))
+    db_session.add(ChatMessage(topic_id=topic.id, author="chris", body="second-line", created_at=now - timedelta(hours=2) + timedelta(seconds=30)))
+    db_session.add(ChatMessage(topic_id=topic.id, author="chris", body="an-hour-later", created_at=now - timedelta(hours=1)))
+    db_session.add(ChatMessage(topic_id=topic.id, author="friend", body="third-line", created_at=now))
     db_session.commit()
     page = a.get(f"/topics/{topic_id}").text
-    bubbles = [chunk for chunk in page.split('<div class="bubble')[1:]]
-    assert len(bubbles) == 3
-    assert "cont" not in bubbles[0].split(">", 1)[0]
-    assert " cont" in bubbles[1].split(">", 1)[0]
-    assert "cont" not in bubbles[2].split(">", 1)[0]
+    bubbles = [chunk.split(">", 1)[0] for chunk in page.split('<div class="bubble')[1:]]
+    assert len(bubbles) == 4
+    assert "cont" not in bubbles[0]
+    assert " cont" in bubbles[1]
+    assert "cont" not in bubbles[2], "an hour's gap deserves its own header"
+    assert "cont" not in bubbles[3]
     assert 'data-author="chris"' in bubbles[0]
+    assert 'data-at="' in bubbles[0]
     assert 'id="chat-new"' in page
     assert '<div class="chat-log-wrap">' in page
