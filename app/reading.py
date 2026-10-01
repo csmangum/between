@@ -10,20 +10,32 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from html.parser import HTMLParser
 from typing import Literal
 
 from sqlalchemy.orm import Session
 
 from . import access
+from .markdown_render import render_markdown
 from .models import ChatMessage, Comment, Topic, Withdrawal, Writing
-from .queries import open_topics, topic_withdrawals
+from .queries import open_topic_summaries, topic_withdrawals
 
 WORDS_PER_MINUTE = 220
 WORD = re.compile(r"[\w'’-]+", re.UNICODE)
 
 
 def word_count(text: str) -> int:
-    return len(WORD.findall(text or ""))
+    class VisibleText(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.text: list[str] = []
+
+        def handle_data(self, data: str) -> None:
+            self.text.append(data)
+
+    visible = VisibleText()
+    visible.feed(render_markdown(text or ""))
+    return len(WORD.findall("".join(visible.text)))
 
 
 def minutes_for(words: int) -> int:
@@ -96,16 +108,16 @@ class Reading:
     following: Neighbour | None
 
 
-def _neighbours(topic: Topic, topics: list[Topic]) -> tuple[Neighbour | None, Neighbour | None]:
-    ids = [t.id for t in topics]
+def _neighbours(topic: Topic, topics: list[tuple[int, str]]) -> tuple[Neighbour | None, Neighbour | None]:
+    ids = [topic_id for topic_id, _title in topics]
     if topic.id not in ids:
         return None, None
     i = ids.index(topic.id)
     before = topics[i - 1] if i > 0 else None
     after = topics[i + 1] if i + 1 < len(topics) else None
     return (
-        Neighbour(before.id, before.title) if before else None,
-        Neighbour(after.id, after.title) if after else None,
+        Neighbour(*before) if before else None,
+        Neighbour(*after) if after else None,
     )
 
 
@@ -123,7 +135,7 @@ def build_reading(db: Session, user: str, topic: Topic) -> Reading:
     words = sum(p.words for p in pieces)
     sealed = sum(1 for w in topic.writings if access.writing_visible(user, w) and not access.writing_open(user, w))
     sealed += sum(1 for c in topic.comments if access.comment_visible(user, c) and not access.comment_open(user, c))
-    previous, following = _neighbours(topic, open_topics(db, user))
+    previous, following = _neighbours(topic, open_topic_summaries(db, user))
     return Reading(
         topic=topic,
         prompt=topic.prompt if access.topic_prompt_open(user, topic) else "",

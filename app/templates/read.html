@@ -59,7 +59,7 @@
   {% endfor %}
 
   {% if reading.sealed %}
-    <p class="meta reading-sealed">{{ reading.sealed|count_label("sealed page", "sealed pages") }} wait for you — <a href="/topics/{{ topic.id }}">open them on the topic page</a>; nothing opens from here.</p>
+    <p class="meta reading-sealed">{{ reading.sealed|count_label("sealed item", "sealed items") }} wait for you — <a href="/topics/{{ topic.id }}">open them on the topic page</a>; nothing opens from here.</p>
   {% endif %}
 
   {% if reading.margin %}

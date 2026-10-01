@@ -65,6 +65,7 @@ def _ids(page: str) -> list[str]:
 def test_words_and_minutes():
     assert reading.word_count("") == 0
     assert reading.word_count("**Don’t** stop — it's `fine`, isn’t it?") == 6
+    assert reading.word_count("[desk](https://example.com/a)") == 1
     assert reading.minutes_for(0) == 0
     assert reading.minutes_for(1) == 1
     assert reading.minutes_for(reading.WORDS_PER_MINUTE * 3) == 3
@@ -119,7 +120,7 @@ def test_the_view_shows_openness_only_and_sends_sealed_things_to_the_topic_page(
     for word in ("sealed-page-word", "sealed-title-word", "hidden-page-word", "private-note-word"):
         assert word not in theirs, word
     assert _ids(theirs)[0] == f"writing-{opened}"
-    assert "1 sealed page wait" in theirs and f'href="/topics/{topic_id}"' in theirs
+    assert "1 sealed item wait" in theirs and f'href="/topics/{topic_id}"' in theirs
 
     mine = a.get(f"/topics/{topic_id}/read").text
     assert "hidden-page-word" in mine and "private-note-word" in mine and "sealed page" not in mine

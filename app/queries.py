@@ -85,6 +85,20 @@ def open_topics(db: Session, user: str) -> list[Topic]:
     return [t for t in topics if access.topic_open(user, t)]
 
 
+def open_topic_summaries(db: Session, user: str) -> list[tuple[int, str]]:
+    """Topic IDs and titles this person may open, without loading their contents."""
+    mine = access.contributed_topic_ids(db, user)
+    rows = (
+        db.query(Topic.id, Topic.title)
+        .filter(
+            (Topic.created_by == user) | (Topic.share_status == "shared") | Topic.id.in_(mine)
+        )
+        .order_by(Topic.created_at.asc())
+        .all()
+    )
+    return [(topic_id, title) for topic_id, title in rows]
+
+
 def topic_withdrawals(db: Session, topic_id: int) -> list[Withdrawal]:
     """Every stub this topic has produced, oldest first. The caller filters by who may see each."""
     return db.query(Withdrawal).filter(Withdrawal.topic_id == topic_id).order_by(Withdrawal.withdrawn_at.asc()).all()
