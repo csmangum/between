@@ -90,9 +90,7 @@ def open_topic_summaries(db: Session, user: str) -> list[tuple[int, str]]:
     mine = access.contributed_topic_ids(db, user)
     rows = (
         db.query(Topic.id, Topic.title)
-        .filter(
-            (Topic.created_by == user) | (Topic.share_status == "shared") | Topic.id.in_(mine)
-        )
+        .filter((Topic.created_by == user) | (Topic.share_status == "shared") | Topic.id.in_(mine))
         .order_by(Topic.created_at.asc())
         .all()
     )
