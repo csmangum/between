@@ -81,6 +81,12 @@ Beyond the usual Markdown, the room renders straight quotes and dashes as typogr
 
 Archive and export only include what *you* are allowed to read: your private pages plus anything both of you accepted. If something you had opened is returned to the other person's desk, you keep a line — its title, when it was opened, when it was returned — never the page. Nothing is kept for an offer that was never opened.
 
+## Returning to it
+
+**Find**, on the Kept page, searches every topic, page, note and margin line you may read. The first letters of a word are enough. It answers with the same rule as the archive — nothing sealed, nothing on the other desk — and never hints that a hidden page matched. Each hit opens the topic's reading view at the exact place.
+
+**Read it through**, linked from every topic you can open, lays the topic out as a document: pages and notes in the order they were written, a contents list, a word count and reading time, the margin at the end while the topic is shared. Nothing opens from there; sealed things are counted and pointed back to the topic page. It prints cleanly.
+
 ## What the other person can see before opening
 
 The title of a sealed topic or writing, a count of sealed offers waiting, and — inside a shared topic — that you are in the margin and typing. Nothing about anything private, not even that it exists.
