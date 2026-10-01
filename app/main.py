@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, Form, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, selectinload
 from starlette.concurrency import run_in_threadpool
@@ -178,16 +179,48 @@ def fmt_dt_soft(value: datetime | None) -> str:
     return local.strftime("%b %d, %Y")
 
 
+def when_tag(value: datetime | None) -> Markup:
+    """The soft time on the page, the exact time on hover, the machine time for anyone who asks."""
+    if not value:
+        return Markup("")
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return Markup(
+        f'<time datetime="{escape(value.isoformat(timespec="seconds"))}" title="{escape(fmt_dt(value))}">'
+        f"{escape(fmt_dt_soft(value))}</time>"
+    )
+
+
 def count_label(n: int, singular: str, plural: str | None = None) -> str:
     number = int(n or 0)
     word = singular if number == 1 else (plural or f"{singular}s")
     return f"{number} {word}"
 
 
+WORDS_PER_MINUTE = 200
+
+
+def word_count(text: str | None) -> int:
+    return len((text or "").split())
+
+
+def reading_time(text: str | None) -> str:
+    """How long a page asks of its reader, in the room's voice."""
+    words = word_count(text)
+    if words == 0:
+        return ""
+    if words < WORDS_PER_MINUTE:
+        return "under a minute"
+    return f"{round(words / WORDS_PER_MINUTE)} min read"
+
+
 templates.env.filters["md"] = md
 templates.env.filters["when"] = fmt_dt
 templates.env.filters["when_soft"] = fmt_dt_soft
+templates.env.filters["when_tag"] = when_tag
 templates.env.filters["count_label"] = count_label
+templates.env.filters["reading_time"] = reading_time
+templates.env.filters["word_count"] = word_count
 templates.env.filters["share_label"] = share.label
 templates.env.globals["app_name"] = APP_NAME
 templates.env.globals["display_for"] = auth.display_for
@@ -431,6 +464,16 @@ def set_agent_consent(request: Request, allow: str = Form(""), db: Session = Dep
     else:
         flash(request, "Drafting help withdrawn. Nothing you both opened will be sent anywhere.")
     return RedirectResponse("/#drafting", status_code=303)
+
+
+PREVIEW_MAX_CHARS = 200_000
+
+
+@app.post("/preview", response_class=HTMLResponse)
+def preview(request: Request, body: str = Form("")):
+    """Render Markdown exactly as the page would, for the author's eyes only. Nothing is stored."""
+    require_user(request)
+    return HTMLResponse(render_markdown(body[:PREVIEW_MAX_CHARS]))
 
 
 @app.post("/topics")
