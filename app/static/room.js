@@ -161,7 +161,8 @@
   }
 
   // --- Drafts: what is typed on the desk stays in this browser until the server has kept it. --
-  const DRAFT_PREFIX = "between:draft:v1:";
+  const LEGACY_DRAFT_PREFIX = "between:draft:v1:";
+  const DRAFT_PREFIX = `between:draft:v2:${encodeURIComponent(document.body.dataset.user || "anonymous")}:`;
   const DRAFT_TTL = 30 * DAY;
   const desks = [...document.querySelectorAll("[data-desk]")].filter(
     (field) => (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) && field.id,
@@ -199,6 +200,19 @@
     } catch (_) {
       /* ignore */
     }
+  }
+
+  function discardLegacyDrafts() {
+    const keys = [];
+    try {
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(LEGACY_DRAFT_PREFIX)) keys.push(key);
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    keys.forEach(dropDraft);
   }
 
   function allDraftKeys() {
@@ -247,6 +261,7 @@
     // A success flash means the form just submitted was kept; its draft has done its job.
     const kept = Boolean(document.querySelector(".flash.ok"));
     const now = Date.now();
+    discardLegacyDrafts();
     allDraftKeys().forEach((key) => {
       const draft = readDraft(key);
       if (!draft || now - (draft.t || 0) > DRAFT_TTL || (kept && draft.s)) dropDraft(key);

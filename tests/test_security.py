@@ -171,6 +171,26 @@ def test_password_hash_cli_does_not_require_secret_key():
     assert result.stdout.startswith("scrypt$")
 
 
+def test_duplicate_usernames_are_refused_in_subprocess():
+    env = os.environ.copy()
+    env["SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-subprocess"
+    env["USER1_NAME"] = env["USER2_NAME"] = "same-person"
+    env["USER1_PASSWORD"] = "password-one"
+    env["USER2_PASSWORD"] = "password-two"
+    env.pop("BETWEEN_DEV", None)
+    env.pop("USER1_PASSWORD_HASH", None)
+    env.pop("USER2_PASSWORD_HASH", None)
+    result = subprocess.run(
+        [sys.executable, "-c", "from app.auth import load_people; load_people()"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode != 0
+    assert "Between refused to start: USER1_NAME and USER2_NAME must be different people." in result.stderr
+    assert "NameError" not in result.stderr
+
+
 def test_session_validity_rules():
     person = auth.load_people()["chris"]
     session: dict = {}
@@ -405,6 +425,40 @@ def test_drafting_needs_both_consents(db_session: Session, monkeypatch):
     b.post("/me/agent", data={"allow": "0"}, follow_redirects=False)
     db_session.expire_all()
     assert agent.allowed(db_session) is False
+
+
+@pytest.mark.parametrize("content", [None, {}, [], 42, "", "  "])
+def test_drafting_rejects_non_string_or_empty_provider_content(monkeypatch, content):
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"choices": [{"message": {"content": content}}]}
+
+    class Client:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def post(self, *args, **kwargs):
+            return Response()
+
+    topic = SimpleNamespace(
+        share_status="shared",
+        title="Letters",
+        prompt="",
+        writings=[],
+        comments=[],
+        messages=[],
+    )
+    monkeypatch.setattr(agent, "_settings", lambda: ("test-key", "https://api.example", "test-model"))
+    monkeypatch.setattr(agent.httpx, "Client", lambda **kwargs: Client())
+
+    with pytest.raises(RuntimeError, match="empty-reply"):
+        agent.draft_reply(topic, "chris")
 
 
 def test_drafting_ui_absent_without_a_key(client: TestClient, monkeypatch):
