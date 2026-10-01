@@ -437,33 +437,84 @@ button.full, .btn.full { width: 100%; margin-top: 16px; }
   color: #f7f1e8;
   max-width: 66ch;
   overflow-wrap: break-word;
+  text-wrap: pretty;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+  hanging-punctuation: first last;
+  font-variant-numeric: oldstyle-nums proportional-nums;
+  font-kerning: normal;
+  font-feature-settings: "kern", "liga", "onum";
 }
-.prose p { margin: 0 0 1em; }
+.prose p { margin: 0 0 1em; orphans: 2; widows: 2; }
 .prose h1, .prose h2, .prose h3, .prose h4 {
   font-family: var(--serif);
   font-weight: 500;
   letter-spacing: -0.02em;
   line-height: 1.25;
   margin: 1.25em 0 0.4em;
+  text-wrap: balance;
+  hyphens: manual;
 }
 .prose h1 { font-size: 1.55em; }
 .prose h2 { font-size: 1.32em; }
 .prose h3 { font-size: 1.16em; }
-.prose h4 { font-size: 1.05em; }
+.prose h4 {
+  font-family: var(--sans);
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.prose em { font-style: italic; }
+.prose strong { font-weight: 600; color: var(--ink); }
 .prose blockquote {
-  margin: 0 0 1em;
-  padding: 0.05em 0 0.05em 1em;
+  position: relative;
+  margin: 1.2em 0 1.2em;
+  padding: 0.2em 0 0.2em 1.4em;
   border-left: 2px solid color-mix(in srgb, var(--accent) 60%, var(--line));
   color: var(--muted);
   font-style: italic;
+  font-size: 1.02em;
 }
-.prose ul, .prose ol { margin: 0 0 1em; padding-left: 1.25em; }
+.prose blockquote::before {
+  content: "\201C";
+  position: absolute;
+  left: 0.3em;
+  top: -0.35em;
+  font-size: 2.6em;
+  line-height: 1;
+  color: color-mix(in srgb, var(--accent) 55%, transparent);
+  font-style: normal;
+  pointer-events: none;
+}
+.prose blockquote p:last-child { margin-bottom: 0; }
+.prose blockquote em { font-style: normal; }
+.prose ul, .prose ol { margin: 0 0 1em; padding-left: 1.4em; }
 .prose li { margin: 0.28em 0; }
-.prose a { text-underline-offset: 3px; }
+.prose li::marker { color: var(--accent); }
+.prose ul > li::marker { content: "\2013\00a0\00a0"; }
+.prose a {
+  color: color-mix(in srgb, var(--accent) 78%, var(--ink));
+  text-decoration-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 160ms var(--ease);
+}
+.prose a:hover { text-decoration-color: var(--accent); }
 .prose hr {
   border: 0;
-  border-top: 1px solid var(--line);
-  margin: 1.6em 0;
+  margin: 2em 0;
+  text-align: center;
+  height: auto;
+}
+.prose hr::before {
+  content: "\00b7\2003\00b7\2003\00b7";
+  display: block;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  font-size: 1.05em;
+  line-height: 1;
 }
 .prose table {
   width: 100%;
@@ -471,6 +522,7 @@ button.full, .btn.full { width: 100%; margin-top: 16px; }
   margin: 0 0 1em;
   font-family: var(--sans);
   font-size: 0.92em;
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .prose th, .prose td {
   border-bottom: 1px solid var(--line);
@@ -478,12 +530,20 @@ button.full, .btn.full { width: 100%; margin-top: 16px; }
   padding: 7px 8px;
   vertical-align: top;
 }
+.prose th {
+  font-size: 0.82em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
 .prose code {
   font-family: var(--mono);
   font-size: 0.86em;
   background: rgba(0, 0, 0, 0.28);
   padding: 0.08em 0.35em;
   border-radius: 4px;
+  hyphens: none;
 }
 .prose pre {
   background: #0d0c0b;
@@ -493,8 +553,42 @@ button.full, .btn.full { width: 100%; margin-top: 16px; }
   font-family: var(--mono);
   font-size: 14px;
   border: 1px solid var(--line-soft);
+  hyphens: none;
 }
 .prose pre code { background: none; padding: 0; font-size: inherit; }
+.prose dl { margin: 0 0 1em; }
+.prose dt { font-weight: 600; margin-top: 0.7em; }
+.prose dd { margin: 0.15em 0 0 1.4em; color: var(--muted); }
+.prose abbr[title] {
+  text-decoration: underline dotted;
+  text-decoration-color: var(--faint);
+  text-underline-offset: 3px;
+  cursor: help;
+  letter-spacing: 0.03em;
+}
+.prose sup, .prose sub { font-size: 0.72em; line-height: 0; }
+.prose sup { vertical-align: 0.55em; }
+.prose sub { vertical-align: -0.3em; }
+.prose .footnote-ref {
+  text-decoration: none;
+  padding: 0 0.12em;
+  font-family: var(--sans);
+  font-weight: 600;
+}
+.prose .footnote {
+  margin-top: 2.2em;
+  font-size: 0.86em;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.prose .footnote hr { margin: 0 0 0.9em; height: 1px; width: 6em; background: var(--line); }
+.prose .footnote hr::before { content: none; }
+.prose .footnote ol { padding-left: 1.6em; margin: 0; }
+.prose .footnote li { margin: 0 0 0.5em; padding-left: 0.2em; border-radius: 6px; transition: background 400ms var(--ease); }
+.prose .footnote li:target { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.prose .footnote li p { margin: 0; }
+.prose .footnote-backref { text-decoration: none; margin-left: 0.2em; }
+.prose sup:target .footnote-ref { background: color-mix(in srgb, var(--accent) 24%, transparent); border-radius: 3px; }
 .author-chip {
   display: inline-flex;
   align-items: center;
@@ -543,6 +637,11 @@ button.full, .btn.full { width: 100%; margin-top: 16px; }
   margin: 0.5em 0 0.25em;
 }
 .prose.compact pre { font-size: 0.92em; padding: 8px 10px; }
+.prose.compact h4 { text-transform: none; letter-spacing: 0; color: inherit; }
+.prose.compact blockquote { padding-left: 0.9em; font-size: inherit; margin: 0 0 0.55em; }
+.prose.compact blockquote::before { content: none; }
+.prose.compact hr { margin: 0.8em 0; }
+.prose.compact .footnote { margin-top: 1em; }
 
 .chat-panel {
   position: sticky;
