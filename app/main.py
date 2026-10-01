@@ -16,6 +16,7 @@ from starlette.types import Scope
 
 from . import auth, config
 from .db import Base, db_ok, engine, migrate
+from .events import stream
 from .routes import routers
 from .security import SameOriginMiddleware, SecurityHeadersMiddleware
 from .views import APP_NAME, BASE_DIR, RedirectNeeded, current_user, render
@@ -31,6 +32,7 @@ def init_db() -> None:
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_db()
     yield
+    stream.close_all()
 
 
 class CachedStaticFiles(StaticFiles):

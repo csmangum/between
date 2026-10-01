@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
-from .. import access, agent, share, store
+from .. import access, agent, events, share, store
 from ..db import get_db
 from ..hub import hub
 from ..markdown_render import clear_markdown_cache
@@ -88,6 +88,7 @@ def offer_topic(request: Request, topic_id: int, db: Session = Depends(get_db)) 
         topic.updated_at = utcnow()
         db.commit()
         store.write_local(topic)
+        events.tell(db, user, "sealed", topic.id)
         flash(request, f"Sent to {other_display(user)}. It stays sealed until they open it.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
@@ -102,6 +103,7 @@ def accept_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
         topic.updated_at = utcnow()
         db.commit()
         store.write_shared(topic)
+        events.tell(db, user, "opened", topic.id)
         flash(request, "Opened. This sits on the table between you now.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
 
@@ -132,6 +134,7 @@ async def decline_topic(request: Request, topic_id: int, db: Session = Depends(g
     topic = load_topic(db, topic_id)
     if topic and topic.created_by != user and topic.share_status == "offered":
         await _close_topic(db, topic, user)
+        events.tell(db, user, "unopened", topic.id)
         flash(request, "Left unopened. It returned to their desk.")
         return RedirectResponse("/", status_code=303)
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)
@@ -143,6 +146,7 @@ async def revoke_topic(request: Request, topic_id: int, db: Session = Depends(ge
     topic = load_topic(db, topic_id)
     if topic and topic.created_by == user and topic.share_status in {"offered", "shared"}:
         was_open = await _close_topic(db, topic, user)
+        events.tell(db, user, "returned", topic.id)
         if was_open:
             other = other_display(user)
             flash(request, f"Pulled back. {other} keeps a note that it was open between you, not the pages.")

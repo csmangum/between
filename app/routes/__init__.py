@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from . import archive, auth, chat, comments, home, preview, topics, writings
+from . import archive, auth, chat, comments, events, home, preview, topics, writings
 
 routers: tuple[APIRouter, ...] = (
     auth.router,
@@ -15,4 +15,5 @@ routers: tuple[APIRouter, ...] = (
     preview.router,
     archive.router,
     chat.router,
+    events.router,
 )
