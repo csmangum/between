@@ -33,6 +33,19 @@ def test_footnotes_render_with_page_unique_ids():
     assert 'target="_blank"' not in first
 
 
+def test_identical_footnote_bodies_get_unique_ids_per_occurrence():
+    _render_cached.cache_clear()
+    body = "Claim.[^1]\n\n[^1]: Note."
+
+    first = render_markdown(body)
+    second = render_markdown(body)
+
+    ids_first = set(re.findall(r'id="(fn(?:ref)?:[^"]+)"', first))
+    ids_second = set(re.findall(r'id="(fn(?:ref)?:[^"]+)"', second))
+    assert ids_first and ids_second and ids_first.isdisjoint(ids_second)
+    assert _render_cached.cache_info().currsize == 0
+
+
 def test_definition_lists_and_abbreviations():
     html = render_markdown("Letter\n:   A page sent and then opened.\n\nThe W3C.\n\n*[W3C]: World Wide Web Consortium")
     assert "<dl>" in html and "<dt>Letter</dt>" in html and "<dd>A page sent and then opened.</dd>" in html
@@ -41,11 +54,12 @@ def test_definition_lists_and_abbreviations():
 
 def test_hand_written_classes_and_ids_are_dropped():
     html = render_markdown(
-        '<div class="panel" id="content">x</div> <sup id="hijack">1</sup> '
+        '<div class="panel" id="content">x</div> <div class="footnote">y</div> '
+        '<sup id="hijack">1</sup> <sup id="fnref:x">2</sup> '
         '<a class="btn" href="https://e.org">l</a> <abbr title="t" class="x">a</abbr> H<sub>2</sub>O'
     )
-    assert "<div>x</div>" in html
-    assert "<sup>1</sup>" in html
+    assert "<div>x</div>" in html and "<div>y</div>" in html
+    assert "<sup>1</sup>" in html and "<sup>2</sup>" in html
     assert 'class="btn"' not in html and 'id="content"' not in html and 'class="x"' not in html
     assert '<a href="https://e.org" rel="noopener noreferrer" target="_blank">l</a>' in html
     assert "H<sub>2</sub>O" in html

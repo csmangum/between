@@ -14,6 +14,7 @@ from typing import Any
 
 import markdown
 import nh3
+from markdown.util import HtmlStash
 
 ALLOWED_TAGS = {
     "p",
@@ -74,8 +75,38 @@ _ANCHOR = re.compile(r"<a\s+([^>]+)>", re.IGNORECASE)
 _IMG = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
 _ALT = re.compile(r'\balt="([^"]*)"', re.IGNORECASE)
 _REL = re.compile(r'\s*rel="[^"]*"')
+_RAW_HTML_TAG = re.compile(r"""<[A-Za-z][A-Za-z0-9:-]*(?:[^<>"']|"[^"]*"|'[^']*')*>""")
+_HTML_ATTRIBUTE = re.compile(r"""(?P<space>\s+)(?P<name>[^\s=/>]+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s/>]+))?""")
+_FOOTNOTE = re.compile(r"\[\^[^\]]+\]")
+
+
+def _strip_authored_attributes(html: str) -> str:
+    """Remove author-supplied classes and IDs from raw HTML before Markdown conversion."""
+
+    def strip_tag(match: re.Match[str]) -> str:
+        tag = match.group(0)
+        name_end = re.match(r"<[A-Za-z][A-Za-z0-9:-]*", tag)
+        if not name_end:
+            return tag
+        attributes = tag[name_end.end() : -1]
+        attributes = _HTML_ATTRIBUTE.sub(
+            lambda attribute: "" if attribute.group("name").lower() in {"class", "id"} else attribute.group(0),
+            attributes,
+        )
+        return f"{tag[: name_end.end()]}{attributes}>"
+
+    return _RAW_HTML_TAG.sub(strip_tag, html)
+
+
+class _AuthorHTMLStash(HtmlStash):
+    def store(self, html: Any) -> str:
+        if isinstance(html, str):
+            html = _strip_authored_attributes(html)
+        return super().store(html)
+
 
 _markdown = markdown.Markdown(extensions=EXTENSIONS, extension_configs=EXTENSION_CONFIGS)
+_markdown.htmlStash = _AuthorHTMLStash()
 _markdown_lock = threading.Lock()
 
 
@@ -136,7 +167,7 @@ def _render_cached(digest: str, text: str) -> str:
 def render_markdown(text: str | None, *, cache: bool = True) -> str:
     """`cache=False` is for previews of text still being typed, so they do not crowd out kept pages."""
     body = text or ""
-    if not cache:
+    if not cache or _FOOTNOTE.search(body):
         return _render(body)
     digest = hashlib.sha256(body.encode("utf-8", errors="ignore")).hexdigest()
     return _render_cached(digest, body)

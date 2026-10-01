@@ -39,6 +39,8 @@
       this.kind = textarea.dataset.editor === "writing" ? "writing" : "note";
       this.previewOn = false;
       this.focusOn = false;
+      this.focusInert = [];
+      this.focusReturnTarget = null;
       this.previewTimer = null;
       this.previewAbort = null;
       this.build();
@@ -121,10 +123,11 @@
       window.addEventListener("resize", () => this.fit());
       if (this.kind === "writing") {
         document.addEventListener("keydown", (event) => {
-          if (event.key === "Escape" && this.focusOn) {
+          if (!this.focusOn) return;
+          if (event.key === "Escape") {
             event.preventDefault();
             this.toggleFocus(false);
-          }
+          } else if (event.key === "Tab") this.trapFocus(event);
         });
       }
     }
@@ -175,7 +178,8 @@
     lineBounds(start, end) {
       const text = this.ta.value;
       const from = text.lastIndexOf("\n", start - 1) + 1;
-      let to = text.indexOf("\n", end);
+      const lastSelected = end > start ? end - 1 : end;
+      let to = text.indexOf("\n", lastSelected);
       if (to === -1) to = text.length;
       return { from, to };
     }
@@ -251,8 +255,7 @@
       const n = used.length ? Math.max(...used) + 1 : 1;
       const marker = `[^${n}]`;
       const tail = text.slice(end);
-      const sep = text.trimEnd() === "" ? "" : "\n\n";
-      const definition = `${sep}${marker}: `;
+      const definition = `\n\n${marker}: `;
       // Two edits, one undo-able step each: the marker where the reader is, the note at the end.
       this.ta.setRangeText(marker, start, end, "end");
       const length = this.ta.value.length;
@@ -274,7 +277,9 @@
         if (key === "i") return this.shortcut(event, () => this.wrap("*"));
         if (key === "k") return this.shortcut(event, () => this.link());
       }
-      if (event.key === "Enter" && !mod && !event.shiftKey && !event.altKey) return this.smartEnter(event);
+      if (event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+        return this.smartEnter(event);
+      }
       if (event.key === "Tab" && !mod && !event.altKey) return this.smartTab(event);
       return undefined;
     }
@@ -327,6 +332,46 @@
     }
 
     // --- preview and focus -------------------------------------------------------------------
+    trapFocus(event) {
+      const focusable = [...this.root.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )].filter((element) => !element.closest("[hidden]") && element.getClientRects().length);
+      if (!focusable.length) {
+        event.preventDefault();
+        this.root.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !this.root.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !this.root.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    setBackgroundInert(inert) {
+      if (inert) {
+        this.focusInert = [];
+        let current = this.root;
+        while (current.parentElement) {
+          const parent = current.parentElement;
+          for (const sibling of parent.children) {
+            if (sibling === current) continue;
+            this.focusInert.push({ element: sibling, wasInert: sibling.inert });
+            sibling.inert = true;
+          }
+          if (parent === document.body) break;
+          current = parent;
+        }
+        return;
+      }
+      for (const { element, wasInert } of this.focusInert) element.inert = wasInert;
+      this.focusInert = [];
+    }
+
     togglePreview(force) {
       this.previewOn = typeof force === "boolean" ? force : !this.previewOn;
       this.previewButton.setAttribute("aria-pressed", String(this.previewOn));
@@ -343,13 +388,15 @@
 
     async renderPreview() {
       const body = this.ta.value;
+      if (this.previewAbort) this.previewAbort.abort();
+      this.previewAbort = null;
       if (!body.trim()) {
         this.preview.innerHTML = "";
         this.preview.append(el("p", { class: "desk-preview-empty", text: "Nothing to show yet." }));
         return;
       }
-      if (this.previewAbort) this.previewAbort.abort();
-      this.previewAbort = new AbortController();
+      const controller = new AbortController();
+      this.previewAbort = controller;
       const data = new FormData();
       data.set("body", body);
       try {
@@ -358,28 +405,51 @@
           body: data,
           credentials: "same-origin",
           headers: { Accept: "text/html" },
-          signal: this.previewAbort.signal,
+          signal: controller.signal,
         });
         if (!response.ok) throw new Error(String(response.status));
         // The server rendered and sanitized this exactly as the kept page will be.
-        this.preview.innerHTML = await response.text();
+        const html = await response.text();
+        if (this.previewAbort !== controller) return;
+        this.preview.innerHTML = html;
         if (window.Between) window.Between.localizeTimes(this.preview);
       } catch (error) {
-        if (error && error.name === "AbortError") return;
+        if (controller.signal.aborted || (error && error.name === "AbortError")) return;
         this.preview.innerHTML = "";
         this.preview.append(el("p", { class: "desk-preview-empty", text: "The preview could not be drawn just now." }));
       }
     }
 
     toggleFocus(force) {
-      this.focusOn = typeof force === "boolean" ? force : !this.focusOn;
+      const focusOn = typeof force === "boolean" ? force : !this.focusOn;
+      if (focusOn === this.focusOn) return;
+      if (focusOn) {
+        this.focusReturnTarget = document.activeElement;
+        this.setBackgroundInert(true);
+        this.root.setAttribute("role", "dialog");
+        this.root.setAttribute("aria-modal", "true");
+        this.root.setAttribute("aria-label", "Writing focus mode");
+      } else {
+        this.setBackgroundInert(false);
+        this.root.removeAttribute("role");
+        this.root.removeAttribute("aria-modal");
+        this.root.removeAttribute("aria-label");
+      }
+      this.focusOn = focusOn;
       this.focusButton.setAttribute("aria-pressed", String(this.focusOn));
       this.focusButton.textContent = this.focusOn ? "Back to the room" : "Just the page";
       this.root.classList.toggle("is-focus", this.focusOn);
       document.body.classList.toggle("desk-focus", this.focusOn);
       this.fit();
-      this.ta.focus();
-      if (this.focusOn) this.root.scrollTop = 0;
+      if (this.focusOn) {
+        this.ta.focus();
+        this.root.scrollTop = 0;
+      } else {
+        const target = this.focusReturnTarget;
+        this.focusReturnTarget = null;
+        if (target && target.isConnected && !target.inert && typeof target.focus === "function") target.focus();
+        else this.focusButton.focus();
+      }
     }
   }
 
