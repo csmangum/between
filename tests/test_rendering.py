@@ -65,3 +65,29 @@ def test_preview_renders_do_not_enter_the_cache():
     render_markdown("still typing", cache=False)
     render_markdown("still typin", cache=False)
     assert _render_cached.cache_info().currsize == before
+
+
+# --- the preview endpoint ----------------------------------------------------------------------
+
+
+def test_preview_requires_a_session(client):
+    response = client.post("/preview", data={"body": "**x**"}, follow_redirects=False)
+    assert response.status_code == 303 and response.headers["location"] == "/login"
+
+
+def test_preview_uses_the_same_sanitized_renderer(client):
+    client.post("/login", data={"username": "chris", "password": "pass1"}, follow_redirects=False)
+    _render_cached.cache_clear()
+    response = client.post("/preview", data={"body": '"Hi" <script>1</script>[^1]\n\n[^1]: note'})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert "“Hi”" in response.text and "<script" not in response.text
+    assert 'class="footnote"' in response.text
+    assert response.headers["cache-control"] == "no-store"
+    assert _render_cached.cache_info().currsize == 0, "previews must not fill the page cache"
+
+
+def test_preview_refuses_absurd_lengths(client):
+    client.post("/login", data={"username": "chris", "password": "pass1"}, follow_redirects=False)
+    response = client.post("/preview", data={"body": "x" * 200_001})
+    assert response.status_code == 413
