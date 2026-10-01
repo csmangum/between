@@ -88,7 +88,7 @@
 
   // --- Drafts: what is typed on the desk stays in this browser until the server has kept it. --
   const LEGACY_DRAFT_PREFIX = "between:draft:v1:";
-  const DRAFT_PREFIX = `between:draft:v2:${encodeURIComponent(document.body.dataset.draftUser || "anonymous")}:`;
+  const DRAFT_PREFIX = `between:draft:v2:${encodeURIComponent(document.body.dataset.user || "anonymous")}:`;
   const DRAFT_TTL = 30 * DAY;
   const desks = [...document.querySelectorAll("[data-desk]")].filter(
     (field) => (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) && field.id,
