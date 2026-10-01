@@ -82,14 +82,72 @@
     return bubbles.length ? bubbles[bubbles.length - 1] : null;
   }
 
-  const SAFE_MARKDOWN_ELEMENTS = Object.fromEntries(
-    [
-      "a", "abbr", "blockquote", "br", "code", "dd", "div", "dl", "dt", "em", "h1", "h2", "h3", "h4",
-      "hr", "li", "ol", "p", "pre", "sub", "sup", "table", "tbody", "td", "th", "thead", "tr", "ul",
-      "strong",
-    ].map((tag) => [tag.toUpperCase(), () => document.createElement(tag)]),
-  );
   const BLOCKED_MARKUP_TAGS = new Set(["IFRAME", "MATH", "OBJECT", "SCRIPT", "STYLE", "SVG", "TEMPLATE"]);
+
+  function createSafeElement(tag) {
+    switch (tag) {
+      case "A":
+        return document.createElement("a");
+      case "ABBR":
+        return document.createElement("abbr");
+      case "BLOCKQUOTE":
+        return document.createElement("blockquote");
+      case "BR":
+        return document.createElement("br");
+      case "CODE":
+        return document.createElement("code");
+      case "DD":
+        return document.createElement("dd");
+      case "DIV":
+        return document.createElement("div");
+      case "DL":
+        return document.createElement("dl");
+      case "DT":
+        return document.createElement("dt");
+      case "EM":
+        return document.createElement("em");
+      case "H1":
+        return document.createElement("h1");
+      case "H2":
+        return document.createElement("h2");
+      case "H3":
+        return document.createElement("h3");
+      case "H4":
+        return document.createElement("h4");
+      case "HR":
+        return document.createElement("hr");
+      case "LI":
+        return document.createElement("li");
+      case "OL":
+        return document.createElement("ol");
+      case "P":
+        return document.createElement("p");
+      case "PRE":
+        return document.createElement("pre");
+      case "SUB":
+        return document.createElement("sub");
+      case "SUP":
+        return document.createElement("sup");
+      case "TABLE":
+        return document.createElement("table");
+      case "TBODY":
+        return document.createElement("tbody");
+      case "TD":
+        return document.createElement("td");
+      case "TH":
+        return document.createElement("th");
+      case "THEAD":
+        return document.createElement("thead");
+      case "TR":
+        return document.createElement("tr");
+      case "UL":
+        return document.createElement("ul");
+      case "STRONG":
+        return document.createElement("strong");
+      default:
+        return null;
+    }
+  }
 
   function appendSafeMarkup(target, markup) {
     const parents = [target];
@@ -124,9 +182,8 @@
         if (index > 0) parents.length = index;
         continue;
       }
-      const createElement = SAFE_MARKDOWN_ELEMENTS[tag];
-      if (!createElement) continue;
-      const copy = createElement();
+      const copy = createSafeElement(tag);
+      if (!copy) continue;
       const attribute = (name) => {
         const found = attributes.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i"));
         return found ? decodeText(found[1] ?? found[2] ?? found[3]) : null;
