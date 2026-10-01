@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
-from sqlalchemy import Index, create_engine, event, text
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy import create_engine, event, text
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
 class Base(DeclarativeBase):
@@ -27,7 +29,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 if DATABASE_URL.startswith("sqlite"):
 
     @event.listens_for(engine, "connect")
-    def _sqlite_pragmas(dbapi_connection, _connection_record):
+    def _sqlite_pragmas(dbapi_connection: Any, _connection_record: Any) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA busy_timeout=5000")
         try:
@@ -88,15 +90,13 @@ def migrate() -> None:
                     conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {spec}"))
         have_indexes: set[str] = set()
         for table in ("topics", "writings", "comments", "chat_messages"):
-            have_indexes.update(
-                row[1] for row in conn.execute(text(f"PRAGMA index_list('{table}')")).fetchall()
-            )
+            have_indexes.update(row[1] for row in conn.execute(text(f"PRAGMA index_list('{table}')")).fetchall())
         for name, table, column in indexes:
             if name not in have_indexes:
                 conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} ({column})"))
 
 
-def get_db():
+def get_db() -> Iterator[Session]:
     db = SessionLocal()
     try:
         yield db

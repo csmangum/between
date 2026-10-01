@@ -332,13 +332,27 @@ B’s words are B’s. The topic stays reachable to B (listed on B’s desk as *
 | Share status + UI labels | `app/share.py` |
 | Tables | `app/models.py` |
 | Markdown mirrors | `app/store.py` |
-| Routes, export, flashes | `app/main.py` |
+| App assembly: middleware, static files, error pages, `/health` | `app/main.py` |
+| Security headers and the same-origin lock | `app/security.py` |
+| Templates, Jinja filters, flashes, `render`, `require_user` | `app/views.py` |
+| Read queries shared by routes | `app/queries.py` |
+| Login / logout | `app/routes/auth.py` |
+| Desk (home) and the drafting switch | `app/routes/home.py` |
+| Topics: create, page, offer / accept / decline / revoke, edit, delete, draft | `app/routes/topics.py` |
+| Writings and revisions | `app/routes/writings.py` |
+| Notes | `app/routes/comments.py` |
+| Table, archive, exports | `app/routes/archive.py` |
+| Live margin socket | `app/routes/chat.py` |
 | Chat presence hub | `app/hub.py` |
 | Schema add-ons | `app/db.py` `migrate()` |
 | Desk / consent / topic UI | `app/templates/` |
 | Chat client | `app/static/chat.js` |
 
 If a change touches “who can see this,” it belongs in `access.py` first, then the template. Do not sprinkle status checks only in Jinja.
+
+Each router owns one URL space and nothing else: a route reads through `access`, changes state through `share`, writes mirrors through `store`, and renders through `views`. `main.py` should stay small enough to read in one screen.
+
+`ruff check`, `ruff format --check`, `mypy` (strict, over `app/`), and `pytest` run in CI on every pull request. The configuration is in `pyproject.toml`; the pins are in `requirements-dev.txt`.
 
 ---
 

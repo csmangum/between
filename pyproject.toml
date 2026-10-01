@@ -1,0 +1,35 @@
+[project]
+name = "between"
+version = "0.1.0"
+description = "A private room for two. Write until you are ready; nothing crosses until you send it and they choose to open it."
+requires-python = ">=3.12"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [".venv", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency and form declarations are calls in default arguments by design.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Form"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app"]
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["markdown", "markdown.*", "nh3"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::starlette.exceptions.StarletteDeprecationWarning"]

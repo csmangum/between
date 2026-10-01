@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import contextlib
 import time
 from collections import defaultdict, deque
+from typing import Any
 
 from fastapi import WebSocket
 
@@ -63,7 +65,7 @@ class Hub:
         if seat:
             seat.typing = typing
 
-    def presence(self, topic_id: int) -> dict:
+    def presence(self, topic_id: int) -> dict[str, Any]:
         seats = list(self.rooms.get(topic_id, {}).values())
         seen: dict[str, bool] = {}
         for seat in seats:
@@ -74,7 +76,7 @@ class Hub:
             "typing": [auth.display_for(name) for name, flag in seen.items() if flag],
         }
 
-    async def broadcast(self, topic_id: int, payload: dict) -> None:
+    async def broadcast(self, topic_id: int, payload: dict[str, Any]) -> None:
         dead: list[int] = []
         for key, seat in list(self.rooms.get(topic_id, {}).items()):
             try:
@@ -97,10 +99,8 @@ class Hub:
         if not room:
             return
         for seat in room.values():
-            try:
+            with contextlib.suppress(Exception):
                 await seat.ws.close(code=CLOSE_ROOM_CLOSED)
-            except Exception:
-                pass
 
 
 hub = Hub()
