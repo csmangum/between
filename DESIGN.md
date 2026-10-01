@@ -1,7 +1,7 @@
 # Between — Design Document
 
-**Status:** intimate correspondence polish
-**Date:** 2026-09-23
+**Status:** the room, raised
+**Date:** 2026-10-01
 **Implements:** the running app in this repo
 **Audience:** the two people who will use it, and anyone who extends it
 
@@ -235,6 +235,8 @@ No preview of the prompt. No writing count that would leak how much was prepared
 
 Both people see the prompt. Writings appear according to each writing’s own state. Chat is live.
 
+In the margin, consecutive lines from the same person within five minutes sit under one name; a longer silence earns a fresh header, so the record stays honest about when things were said. If a person has scrolled up when a line arrives, a small pill (“2 new lines below”) points to it rather than yanking the view. If the tab is hidden, its title counts what arrived. A line that has not yet reached the server keeps its *waiting* mark even when grouped.
+
 ### Archive
 
 The readable record: author’s own pages plus anything in `shared`. Export Markdown and JSON use the same filter. Sealed offers are not in the export. That is deliberate — an unread letter is not yet part of the collected conversation.
@@ -272,6 +274,8 @@ The markdown split (`local/` vs `shared/`) exists so the intended boundary is vi
 - WebSocket `/ws/topics/{id}` for chat, accepted only when the topic is `shared`
 - Docker Compose for hosting; `run.sh` for a laptop
 - No analytics, no email. Fonts are served from the app itself, so a visit is reported to nobody.
+- The browser keeps two things of its own: the theme choice, and half-written pages for the signed-in person (see §9). Both live in that browser's local storage and go nowhere. Drafts are cleared on save and on Leave.
+- Every response carries `script-src 'self'`. All behaviour lives in small external files (`theme.js`, `room.js`, `desk.js`, `chat.js`); there is no inline script anywhere.
 - One optional third party: the drafting model at `AGENT_BASE_URL`. It is off unless a key is set **and both people have allowed it from their desk**. When someone asks for a draft, what that person can already read on the topic — including the other person's opened pages and recent margin lines — is sent to that provider. Private pages never are. Either person can withdraw at any time and the button disappears for both.
 
 This stack is a choice: one process a person can read, run, and back up. It is not a platform.
@@ -351,11 +355,15 @@ B’s words are B’s. The topic stays reachable to B (listed on B’s desk as *
 | Share status + UI labels | `app/share.py` |
 | Tables | `app/models.py` |
 | Markdown mirrors | `app/store.py` |
-| Routes, export, flashes | `app/main.py` |
+| Routes, export, flashes, preview, time and reading-time filters | `app/main.py` |
 | Chat presence hub | `app/hub.py` |
 | Schema add-ons | `app/db.py` `migrate()` |
 | Desk / consent / topic UI | `app/templates/` |
-| Chat client | `app/static/chat.js` |
+| Palette tokens and every rule | `app/static/app.css` |
+| Theme before first paint | `app/static/theme.js` |
+| Theme toggle, confirmations, shortcuts, leave hygiene | `app/static/room.js` |
+| Writing surface: growth, count, preview, drafts, writing in full | `app/static/desk.js` |
+| Chat client: presence, grouping, new-lines pill, title count | `app/static/chat.js` |
 
 If a change touches “who can see this,” it belongs in `access.py` first, then the template. Do not sprinkle status checks only in Jinja.
 
