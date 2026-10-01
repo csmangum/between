@@ -154,7 +154,10 @@ def test_exports_say_utc_instead_of_server_local_time(client: TestClient):
 
 
 def test_room_script_ships_drafts_and_local_times(client: TestClient):
+    _login(client, "chris", "pass1")
+    assert 'data-draft-user="chris"' in client.get("/").text
     script = client.get("/static/room.js").text
+    assert "between:draft:v2:" in script
     assert "between:draft:v1:" in script
     assert "localStorage" in script
     assert 'querySelectorAll("time[datetime]")' in script
