@@ -95,7 +95,7 @@
         <label for="topic-title">Title</label>
         <input id="topic-title" name="title" type="text" required maxlength="240" value="{{ topic.title }}" data-desk>
         <label for="topic-prompt">Opening note</label>
-        <textarea id="topic-prompt" name="prompt" data-desk>{{ topic.prompt }}</textarea>
+        <textarea id="topic-prompt" name="prompt" data-desk data-editor="note">{{ topic.prompt }}</textarea>
         <div class="actions">
           <button type="submit">Save changes</button>
         </div>
@@ -174,7 +174,7 @@
                   <label for="edit-title-{{ w.id }}">Title</label>
                   <input id="edit-title-{{ w.id }}" name="title" type="text" value="{{ w.title }}" data-desk>
                   <label for="edit-body-{{ w.id }}">Writing</label>
-                  <textarea id="edit-body-{{ w.id }}" name="body" required data-desk>{{ w.body }}</textarea>
+                  <textarea id="edit-body-{{ w.id }}" name="body" required data-desk data-editor="writing">{{ w.body }}</textarea>
                   <button type="submit">Save changes</button>
                 </form>
                 {% if w.id in removable_writings %}
@@ -192,7 +192,7 @@
                   <label for="rev-title-{{ w.id }}">Title</label>
                   <input id="rev-title-{{ w.id }}" name="title" type="text" value="{{ w.revision_title if w.revision_status == 'private' else w.title }}" data-desk>
                   <label for="rev-body-{{ w.id }}">Revision</label>
-                  <textarea id="rev-body-{{ w.id }}" name="body" required data-desk>{{ w.revision_body if w.revision_status == 'private' else w.body }}</textarea>
+                  <textarea id="rev-body-{{ w.id }}" name="body" required data-desk data-editor="writing">{{ w.revision_body if w.revision_status == 'private' else w.body }}</textarea>
                   <button type="submit">{% if w.revision_status == 'private' %}Save revision{% else %}Keep revision on my desk{% endif %}</button>
                 </form>
               </details>
@@ -208,7 +208,7 @@
               <form method="post" action="/topics/{{ topic.id }}/comments">
                 <input type="hidden" name="writing_id" value="{{ w.id }}">
                 <label for="note-{{ w.id }}">Private note</label>
-                <textarea id="note-{{ w.id }}" name="body" required data-desk placeholder="Stays on your side until you send it."></textarea>
+                <textarea id="note-{{ w.id }}" name="body" required data-desk data-editor="note" placeholder="Stays on your side until you send it."></textarea>
                 <button type="submit">Keep note</button>
               </form>
             {% endif %}
@@ -254,10 +254,9 @@
         <label for="wtitle">Title</label>
         <input id="wtitle" name="title" type="text" data-desk placeholder="Optional heading">
         <label for="wbody">Writing</label>
-        <textarea id="wbody" name="body" required data-desk placeholder="Take your time. Markdown is fine."></textarea>
+        <textarea id="wbody" name="body" required data-desk data-editor="writing" placeholder="Take your time. Markdown is fine."></textarea>
         <div class="actions">
           <button type="submit">Save to my desk</button>
-          <span class="chat-hint">Ctrl+Enter or ⌘+Enter saves too.</span>
         </div>
       </form>
     </section>
@@ -270,7 +269,7 @@
       {% endfor %}
       <form method="post" action="/topics/{{ topic.id }}/comments">
         <label for="topic-note">Private note on the topic</label>
-        <textarea id="topic-note" name="body" required data-desk placeholder="Stays with you until you send it."></textarea>
+        <textarea id="topic-note" name="body" required data-desk data-editor="note" placeholder="Stays with you until you send it."></textarea>
         <button type="submit">Keep note</button>
       </form>
     </section>

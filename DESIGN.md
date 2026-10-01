@@ -203,6 +203,7 @@ Creating a topic is labeled “Keep on my desk,” not “Create” or “Publis
 - Actions: Offer to *Name* / Pull it back / Make private again
 - Each writing has the same badge and actions
 - Compose box: “Save to my desk” (Ctrl/⌘+Enter also saves)
+- The desk itself is a Markdown surface built on a plain textarea: reading-size serif type, a field that grows with the page, a quiet toolbar and shortcuts (bold, italic, link, heading, quote, lists, code, rule, footnote), list and quote continuation on Enter, a live preview drawn by the same renderer that keeps the page, a word count with reading time, and “Just the page,” which hides the rest of the room until Esc. Notes get the lighter version. With scripts off it is a textarea and everything still saves
 - While private: change the title and opening note; remove the topic, a writing, or a note. Removal asks first, and never touches words the other person wrote — a writing holding their notes stays, as does a topic holding their pages
 - Chat panel locked until the topic is shared
 
@@ -267,7 +268,8 @@ In scope for v1:
 - No public registration
 - Bodies withheld from the counterpart’s HTTP responses until `shared`
 - Export filtered the same way as the archive
-- Markdown sanitized on render (nh3 allowlist; no images, links open away with `noopener noreferrer`)
+- Markdown sanitized on render (nh3 allowlist; no images, links open away with `noopener noreferrer`). The renderer adds smart typography, footnotes, definition lists and abbreviations; the only `id` and `class` values that survive are the ones footnotes need, so a page cannot borrow the room's own styles or anchors
+- `POST /preview` renders a draft for the signed-in writer with that same renderer and stores nothing. It only ever receives text the browser already holds, and only sends it to this server
 - The process refuses to start with a missing or sample `SECRET_KEY`, or with sample passwords. `BETWEEN_DEV=1` relaxes only the key, for a laptop.
 - Passwords are stored as scrypt hashes (`USERn_PASSWORD_HASH`, from `python -m app.auth`). A plaintext `USERn_PASSWORD` still works and is hashed in memory at start.
 - Login is throttled per address and per name with exponential backoff after three misses; every miss is logged.
@@ -344,10 +346,13 @@ B’s words are B’s. The topic stays reachable to B (listed on B’s desk as *
 | Notes | `app/routes/comments.py` |
 | Table, archive, exports | `app/routes/archive.py` |
 | Live margin socket | `app/routes/chat.py` |
+| Markdown to sanitized HTML, and `POST /preview` | `app/markdown_render.py`, `app/routes/preview.py` |
 | Chat presence hub | `app/hub.py` |
 | Schema add-ons | `app/db.py` `migrate()` |
 | Desk / consent / topic UI | `app/templates/` |
 | Chat client | `app/static/chat.js` |
+| Drafts in the browser, local times, Ctrl/⌘+Enter | `app/static/room.js` |
+| The writing surface | `app/static/desk.js` |
 
 If a change touches “who can see this,” it belongs in `access.py` first, then the template. Do not sprinkle status checks only in Jinja.
 
