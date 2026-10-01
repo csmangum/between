@@ -76,7 +76,7 @@ def test_stream_delivers_across_threads_and_caps_listeners():
         return got, live, s.listening("chris")
 
     got, live, after = asyncio.run(scenario())
-    assert got == [{"n": 1}, None]
+    assert got == [{"n": 1}, {"type": "close", "reason": "over_limit"}]
     assert live == events.MAX_LISTENERS_PER_PERSON and after == 0
 
 
@@ -102,7 +102,7 @@ def test_frames_begin_with_hello_and_end_when_closed(client: TestClient):
 
 def test_events_requires_a_session_without_redirecting(client: TestClient):
     response = client.get("/events", follow_redirects=False)
-    assert response.status_code == 401
+    assert response.status_code == 204
 
 
 def test_events_endpoint_streams_a_live_offer(db_session: Session):
@@ -149,6 +149,7 @@ def test_pages_open_the_stream_only_for_a_signed_in_person(client: TestClient):
     assert 'data-me="chris" data-other="Friend"' in home
     script = client.get("/static/room.js").text
     assert 'new EventSource("/events")' in script
+    assert "source.close()" in script
     assert "chat" not in script.split("One quiet stream")[1].split("Drafts:")[0]  # the margin is not a notification
 
 

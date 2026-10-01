@@ -150,6 +150,10 @@
         return;
       }
       if (typeof payload.sealed === "number") setSealed(payload.sealed);
+      if (payload.type === "close") {
+        source.close();
+        return;
+      }
       if (payload.type !== "topic") return;
       if (here && Number(here[1]) === payload.topic) notice(NOTICES[payload.what] || "Something changed here.");
       else if (window.location.pathname === "/" && payload.what === "sealed") notice("Something new is waiting for you.");

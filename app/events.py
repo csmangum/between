@@ -51,7 +51,7 @@ class Stream:
             evicted = seats[:-MAX_LISTENERS_PER_PERSON]
             del seats[:-MAX_LISTENERS_PER_PERSON]
         for old in evicted:
-            old.deliver(None)
+            old.deliver({"type": "close", "reason": "over_limit"})
         return listener
 
     def unsubscribe(self, listener: Listener) -> None:

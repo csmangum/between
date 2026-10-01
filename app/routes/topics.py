@@ -99,7 +99,7 @@ def accept_topic(request: Request, topic_id: int, db: Session = Depends(get_db))
     topic = db.get(Topic, topic_id)
     if topic and topic.created_by != user and topic.share_status == "offered":
         share.set_status(topic, "shared")
-        share.clear_withdrawals(db, "topic", topic.id)
+        share.clear_withdrawals(db, "topic", topic.source_id)
         topic.updated_at = utcnow()
         db.commit()
         store.write_shared(topic)

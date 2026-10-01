@@ -37,7 +37,7 @@ def _returned(db: Session, user: str, topics: list[Topic]) -> Groups:
     for stub in withdrawals_for(db, user):
         by_topic[stub.topic_id].append(stub)
     open_ids = {t.id for t in topics}
-    inside = {tid: [s for s in group if s.kind != "topic"] for tid, group in by_topic.items() if tid in open_ids}
+    inside = {tid: group for tid, group in by_topic.items() if tid in open_ids}
     gone = [
         sorted(group, key=lambda s: (s.kind != "topic", s.withdrawn_at))
         for tid, group in by_topic.items()

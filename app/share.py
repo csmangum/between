@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Literal, Protocol, assert_never
+from uuid import uuid4
 
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
@@ -90,8 +91,12 @@ def withdrawal(kind: Kind, obj: Topic | Writing | Comment, actor: str) -> Withdr
         topic, author, title = obj, obj.created_by, obj.title
     else:
         topic, author, title = obj.topic, obj.author, getattr(obj, "title", "")
+    source_id = obj.source_id or str(uuid4())
+    if not obj.source_id:
+        obj.source_id = source_id
     return Withdrawal(
         kind=kind,
+        source_id=source_id,
         object_id=obj.id,
         topic_id=topic.id,
         topic_title=topic.title,
@@ -103,9 +108,9 @@ def withdrawal(kind: Kind, obj: Topic | Writing | Comment, actor: str) -> Withdr
     )
 
 
-def clear_withdrawals(db: Session, kind: Kind, object_id: int) -> None:
+def clear_withdrawals(db: Session, kind: Kind, source_id: str) -> None:
     """Opened again: the live object now tells the truth, so the stub has nothing left to say."""
-    db.execute(delete(Withdrawal).where(Withdrawal.kind == kind, Withdrawal.object_id == object_id))
+    db.execute(delete(Withdrawal).where(Withdrawal.kind == kind, Withdrawal.source_id == source_id))
 
 
 def fold_topic(topic: Topic, actor: str) -> tuple[list[Writing], list[Comment], list[Withdrawal]]:

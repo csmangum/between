@@ -87,7 +87,7 @@ def accept_comment(request: Request, comment_id: int, db: Session = Depends(get_
         if comment.topic.share_status != "shared":
             return RedirectResponse(_anchor(comment), status_code=303)
         share.set_status(comment, "shared")
-        share.clear_withdrawals(db, "comment", comment.id)
+        share.clear_withdrawals(db, "comment", comment.source_id)
         comment.topic.updated_at = utcnow()
         db.commit()
         store.write_shared(comment.topic, comment=comment)

@@ -76,7 +76,7 @@ def accept_writing(request: Request, writing_id: int, db: Session = Depends(get_
         if writing.topic.share_status != "shared":
             return RedirectResponse(_anchor(writing), status_code=303)
         share.set_status(writing, "shared")
-        share.clear_withdrawals(db, "writing", writing.id)
+        share.clear_withdrawals(db, "writing", writing.source_id)
         writing.topic.updated_at = utcnow()
         db.commit()
         store.write_shared(writing.topic, writing)

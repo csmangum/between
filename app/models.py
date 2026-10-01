@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -21,6 +22,7 @@ class Topic(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(36), default=lambda: str(uuid4()), unique=True)
     title: Mapped[str] = mapped_column(String(240))
     prompt: Mapped[str] = mapped_column(Text, default="")
     created_by: Mapped[str] = mapped_column(String(80))
@@ -49,6 +51,7 @@ class Writing(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(36), default=lambda: str(uuid4()), unique=True)
     topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"))
     author: Mapped[str] = mapped_column(String(80))
     title: Mapped[str] = mapped_column(String(240), default="")
@@ -74,6 +77,7 @@ class Comment(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(36), default=lambda: str(uuid4()), unique=True)
     topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"))
     writing_id: Mapped[int | None] = mapped_column(ForeignKey("writings.id"), nullable=True)
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("comments.id"), nullable=True)
@@ -111,6 +115,7 @@ class Withdrawal(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[str] = mapped_column(String(36))
     kind: Mapped[str] = mapped_column(String(20))
     object_id: Mapped[int] = mapped_column(Integer)
     topic_id: Mapped[int] = mapped_column(Integer)
