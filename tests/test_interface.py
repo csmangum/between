@@ -136,6 +136,16 @@ def test_stylesheet_is_fully_tokenised():
     assert ':root[data-theme="light"] { color-scheme: light; }' in css
 
 
+def test_narrow_screen_rules_come_last():
+    """The narrow-screen block adjusts rules of equal specificity, so it only works if it is
+    the later of the two. It once sat near the top and silently lost to .topic-layout."""
+    css = Path("app/static/app.css").read_text(encoding="utf-8")
+    narrow = css.index("@media (max-width: 880px)")
+    for selector in (".topic-layout {", ".chat-panel {", ".chat-log {", "button, .btn {", ".writing:target {"):
+        assert css.index(selector) < narrow, f"{selector} is defined after the narrow-screen block"
+    assert "grid-template-columns: 1fr" in css[narrow:]
+
+
 # --- the page ------------------------------------------------------------------
 
 

@@ -295,19 +295,6 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
   margin-top: 32px;
   align-items: start;
 }
-@media (max-width: 880px) {
-  .grid, .topic-layout { grid-template-columns: 1fr; }
-  .wrap { padding: 0 16px 56px; }
-  .topbar { flex-wrap: wrap; position: static; backdrop-filter: none; background: transparent; }
-  .nav { flex-wrap: wrap; justify-content: flex-end; gap: 12px 14px; }
-  .chat-panel { position: static; max-height: none; }
-  .chat-log { max-height: 42vh; }
-  button, .btn { min-height: 42px; }
-  .theme-toggle { min-height: 36px; }
-  .writing:target { margin-left: 0; padding-left: 0; }
-  .contents { position: static; }
-}
-
 .panel {
   background: color-mix(in srgb, var(--bg-raise) 92%, transparent);
   border: 1px solid var(--line);
@@ -1201,6 +1188,24 @@ button.quiet-danger {
   border-color: color-mix(in srgb, var(--danger) 40%, var(--line));
 }
 button.quiet-danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
+
+/* Narrow screens. This block stays last so it outranks the rules it adjusts. */
+
+@media (max-width: 880px) {
+  .grid, .topic-layout { grid-template-columns: 1fr; }
+  .wrap { padding: 0 16px 56px; }
+  .topbar { flex-wrap: wrap; position: static; backdrop-filter: none; background: transparent; }
+  .nav { flex-wrap: wrap; justify-content: flex-end; gap: 12px 14px; }
+  .chat-panel { position: static; max-height: none; }
+  .chat-log { max-height: 42vh; }
+  button, .btn { min-height: 42px; }
+  .theme-toggle { min-height: 36px; height: 36px; }
+  .tool { min-height: 36px; }
+  .writing:target { margin-left: 0; padding-left: 0; }
+  .writing-tools { gap: 8px; }
+  .word-count { margin-left: 0; width: 100%; order: 3; }
+  .focus-inner { padding-top: 56px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
