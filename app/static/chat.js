@@ -103,7 +103,12 @@
     who.className = "who";
     who.textContent = `${msg.display} · ${msg.created_at}`;
     const body = document.createElement("div");
-    body.textContent = msg.body;
+    if (typeof msg.html === "string") {
+      body.className = "prose compact";
+      body.innerHTML = msg.html;
+    } else {
+      body.textContent = msg.body;
+    }
     el.append(who, body);
     log.appendChild(el);
     if (pendingMessage) pendingBubbles.push({ body: msg.body, el });

@@ -1,7 +1,7 @@
 # Between — Design Document
 
-**Status:** the room, raised
-**Date:** 2026-10-01
+**Status:** intimate correspondence polish
+**Date:** 2026-09-23
 **Implements:** the running app in this repo
 **Audience:** the two people who will use it, and anyone who extends it
 
@@ -166,6 +166,10 @@ Shared objects are both.
 
 Home listings use visibility. Bodies, archive, and export use openness.
 
+### What a return leaves behind
+
+When something that was **open between you** returns to its author's desk — a topic, a writing, or a note, whether by revoke or because its topic folded — the person who had it open keeps a **line, not the page**: what it was called, who wrote it, who returned it, when it was opened and when it was returned. Nothing that was never opened leaves anything: a sealed offer declined or pulled back was not yet part of the record. Opening the same thing again clears its line, because the live page then tells the truth. The line is a snapshot in its own table, so it outlives the original being edited or removed.
+
 ---
 
 ## 8. Visibility matrix
@@ -180,6 +184,7 @@ For person B, looking at an object authored by A:
 | Comment body | absent, or sealed if offered | sealed + Agree | shown |
 | Chat | closed | closed | live + history |
 | Archive / export | omitted | omitted | included |
+| After a return | — | nothing kept | a line: title, dates, who returned it |
 
 Author A always sees their own bodies, including after offer and after share.
 
@@ -201,29 +206,11 @@ Creating a topic is labeled “Keep on my desk,” not “Create” or “Publis
 
 - Badge: private / offered / shared
 - Actions: Offer to *Name* / Pull it back / Make private again
-- Each writing has the same badge and actions, and says how long it asks of its reader
-- Three or more writings earn a short contents list at the top of the column. A sealed page is listed by its title only, marked *sealed*; a private page of the other person is not listed at all
+- Each writing has the same badge and actions
 - Compose box: “Save to my desk” (Ctrl/⌘+Enter also saves)
+- The desk itself is a Markdown surface built on a plain textarea: reading-size serif type, a field that grows with the page, a quiet toolbar and shortcuts (bold, italic, link, heading, quote, lists, code, rule, footnote), list and quote continuation on Enter, a live preview drawn by the same renderer that keeps the page, a word count with reading time, and “Just the page,” which hides the rest of the room until Esc. Notes get the lighter version. With scripts off it is a textarea and everything still saves
 - While private: change the title and opening note; remove the topic, a writing, or a note. Removal asks first, and never touches words the other person wrote — a writing holding their notes stays, as does a topic holding their pages
 - Chat panel locked until the topic is shared
-
-### The writing surface
-
-Every Markdown field carries the same small set of tools, built by `desk.js` so the templates stay plain forms that work without it:
-
-- Fields grow with the words.
-- **Write / Preview.** The preview is drawn by the server (`POST /preview`) with the renderer the page itself uses, so what you see is what will be shown. Nothing is stored; the route requires a person in the room.
-- A running word count with a reading time.
-- **Write in full.** The form moves into a `<dialog>` that takes the whole screen, and moves back on Esc. It is the same form, so saving works the same way.
-- **Picked up again.** A half-written page is kept in the author's own browser storage, keyed to the signed-in name and the page, restored on return with a quiet note and a *Start over* button, and forgotten on save and on Leave. This is the author's own device holding the author's own words; it is not a copy anywhere else.
-
-### Two palettes
-
-The room is dark by default and has been since the first draft. It now also has paper. Every colour in the stylesheet is a token resolved with `light-dark()`, so one set of rules draws either palette and nothing dark can leak into the light one. The theme follows the system unless a person pins it with the round button in the top bar or on the door; the choice lives in that browser alone. A tiny synchronous script sets the theme before first paint so nothing flashes.
-
-### Time
-
-Soft times (“yesterday · 14:10”, “an hour ago”) are `<time>` elements carrying the exact moment as `datetime` and as a hover title. The page reads quietly; the record is still precise.
 
 ### Topic page (counterpart, offered topic)
 
@@ -235,11 +222,21 @@ No preview of the prompt. No writing count that would leak how much was prepared
 
 Both people see the prompt. Writings appear according to each writing’s own state. Chat is live.
 
-In the margin, consecutive lines from the same person within five minutes sit under one name; a longer silence earns a fresh header, so the record stays honest about when things were said. If a person has scrolled up when a line arrives, a small pill (“2 new lines below”) points to it rather than yanking the view. If the tab is hidden, its title counts what arrived. A line that has not yet reached the server keeps its *waiting* mark even when grouped.
-
 ### Archive
 
-The readable record: author’s own pages plus anything in `shared`. Export Markdown and JSON use the same filter. Sealed offers are not in the export. That is deliberate — an unread letter is not yet part of the collected conversation.
+The readable record: author’s own pages plus anything in `shared`. Export Markdown and JSON use the same filter. Sealed offers are not in the export. That is deliberate — an unread letter is not yet part of the collected conversation. What was open and then returned appears as a line under its topic, or in a closing band for topics that are no longer open to you at all.
+
+### Find
+
+One field on the archive, and a page of its own at `/search`. It answers from an FTS5 index over topics, pages, notes and margin lines, which SQLite keeps in step itself through triggers, so no write path can forget it. What is typed becomes a list of quoted prefix terms — the first letters of a word are enough, and nothing a person types can produce an error. Who may see a hit is decided after the index answers, object by object, through `access`, with the archive’s rule: openness, never visibility. A sealed page, a private note on the other desk, the prompt of a topic you only contributed to, a margin line from a topic that has since returned — none of them appear, whatever word is typed, and the page does not say that something hidden matched. Each hit is an escaped excerpt with the word marked, and leads into the reading view at the exact page, note or margin line.
+
+### Reading
+
+Each topic you may open also has a page to be read rather than worked on, at `/topics/{id}/read`. Everything open to you, in the order it was written: pages with their notes beneath them, loose notes between the pages where they fell, a contents list when there is more than one page, a word count and a reading time, the margin at the end while the topic is shared, and the lines for anything that returned. There is nothing to press. Sealed things are counted in one sentence that points back to the topic page, where opening happens. Earlier and later links walk through what you keep in the order the topics began. It prints as a plain document.
+
+### The one badge
+
+The only notification is the **Waiting** badge in the header, counting sealed topics. It is kept truthful without a reload by one quiet stream per person (`GET /events`): the count on connect, and a word when the other person offers, opens, leaves unopened, or returns something. If that something is the page you are looking at, one line appears at the top with a button to reload; on the desk, only a new sealed offer earns that line. The margin never notifies — a message in the margin is a conversation, not a letter — and nothing is stored or listed.
 
 ---
 
@@ -262,6 +259,7 @@ Implications, stated plainly:
 - `data/local/a/` is not cryptographically closed to `b` if `b` has filesystem access.
 - “Stored locally” in v1 means “stored on this machine, namespaced by author, not shown in the other person’s UI until accept.”
 - It does **not** yet mean “the bytes never leave my device.”
+- A page still being typed is also held in that person’s browser (`localStorage`, keyed by page and field) until the server confirms the save. It is the author’s device, it is never sent to the counterpart, and it is cleared once the words are kept.
 
 The markdown split (`local/` vs `shared/`) exists so the intended boundary is visible on disk, not only in SQL. If we later encrypt per-user, those directories are the natural unit.
 
@@ -272,10 +270,9 @@ The markdown split (`local/` vs `shared/`) exists so the intended boundary is vi
 - FastAPI + Jinja + one SQLite file
 - Session cookie auth, two hard-coded people
 - WebSocket `/ws/topics/{id}` for chat, accepted only when the topic is `shared`
+- Server-sent events at `/events`, one stream per signed-in person, carrying only the sealed count and which topic the other person just acted on. Like the chat hub it lives in the process: run one worker.
 - Docker Compose for hosting; `run.sh` for a laptop
 - No analytics, no email. Fonts are served from the app itself, so a visit is reported to nobody.
-- The browser keeps two things of its own: the theme choice, and half-written pages for the signed-in person (see §9). Both live in that browser's local storage and go nowhere. Drafts are cleared on save and on Leave.
-- Every response carries `script-src 'self'`. All behaviour lives in small external files (`theme.js`, `room.js`, `desk.js`, `chat.js`); there is no inline script anywhere.
 - One optional third party: the drafting model at `AGENT_BASE_URL`. It is off unless a key is set **and both people have allowed it from their desk**. When someone asks for a draft, what that person can already read on the topic — including the other person's opened pages and recent margin lines — is sent to that provider. Private pages never are. Either person can withdraw at any time and the button disappears for both.
 
 This stack is a choice: one process a person can read, run, and back up. It is not a platform.
@@ -289,7 +286,10 @@ In scope for v1:
 - No public registration
 - Bodies withheld from the counterpart’s HTTP responses until `shared`
 - Export filtered the same way as the archive
-- Markdown sanitized on render (nh3 allowlist; no images, links open away with `noopener noreferrer`)
+- Markdown sanitized on render (nh3 allowlist; no images, links open away with `noopener noreferrer`). The renderer adds smart typography, footnotes, definition lists and abbreviations; the only `id` and `class` values that survive are the ones footnotes need, so a page cannot borrow the room's own styles or anchors
+- `POST /preview` renders a draft for the signed-in writer with that same renderer and stores nothing. It only ever receives text the browser already holds, and only sends it to this server
+- `GET /events` tells a person nothing they could not learn by reloading: a sealed count and a topic id with one of four words. It carries no titles, no bodies and nothing from the margin. Unauthenticated requests get a plain 401 so the browser stops asking
+- A returned page's line holds a title the other person had already read, and dates. It never holds a body, and it is shown only to the person who lost access
 - The process refuses to start with a missing or sample `SECRET_KEY`, or with sample passwords. `BETWEEN_DEV=1` relaxes only the key, for a laptop.
 - Passwords are stored as scrypt hashes (`USERn_PASSWORD_HASH`, from `python -m app.auth`). A plaintext `USERn_PASSWORD` still works and is hashed in memory at start.
 - Login is throttled per address and per name with exponential backoff after three misses; every miss is logged.
@@ -355,17 +355,34 @@ B’s words are B’s. The topic stays reachable to B (listed on B’s desk as *
 | Share status + UI labels | `app/share.py` |
 | Tables | `app/models.py` |
 | Markdown mirrors | `app/store.py` |
-| Routes, export, flashes, preview, time and reading-time filters | `app/main.py` |
+| App assembly: middleware, static files, error pages, `/health` | `app/main.py` |
+| Security headers and the same-origin lock | `app/security.py` |
+| Templates, Jinja filters, flashes, `render`, `require_user` | `app/views.py` |
+| Read queries shared by routes | `app/queries.py` |
+| Login / logout | `app/routes/auth.py` |
+| Desk (home) and the drafting switch | `app/routes/home.py` |
+| Topics: create, page, offer / accept / decline / revoke, edit, delete, draft | `app/routes/topics.py` |
+| Writings and revisions | `app/routes/writings.py` |
+| Notes | `app/routes/comments.py` |
+| Table, archive, exports | `app/routes/archive.py` |
+| Find: the FTS5 index and its triggers, the safe query, access-filtered hits; `GET /search` | `app/search.py`, `app/routes/search.py` |
+| Reading view: pieces in order, contents, words and minutes, neighbours; `GET /topics/{id}/read` | `app/reading.py`, `app/routes/reading.py` |
+| Live margin socket | `app/routes/chat.py` |
+| Markdown to sanitized HTML, and `POST /preview` | `app/markdown_render.py`, `app/routes/preview.py` |
+| The line a return leaves: `Withdrawal`, `share.withdrawal`, `share.fold_topic` | `app/models.py`, `app/share.py` |
+| One stream per person: `events.tell`, `GET /events` | `app/events.py`, `app/routes/events.py` |
 | Chat presence hub | `app/hub.py` |
 | Schema add-ons | `app/db.py` `migrate()` |
 | Desk / consent / topic UI | `app/templates/` |
-| Palette tokens and every rule | `app/static/app.css` |
-| Theme before first paint | `app/static/theme.js` |
-| Theme toggle, confirmations, shortcuts, leave hygiene | `app/static/room.js` |
-| Writing surface: growth, count, preview, drafts, writing in full | `app/static/desk.js` |
-| Chat client: presence, grouping, new-lines pill, title count | `app/static/chat.js` |
+| Chat client | `app/static/chat.js` |
+| Drafts in the browser, local times, Ctrl/⌘+Enter | `app/static/room.js` |
+| The writing surface | `app/static/desk.js` |
 
 If a change touches “who can see this,” it belongs in `access.py` first, then the template. Do not sprinkle status checks only in Jinja.
+
+Each router owns one URL space and nothing else: a route reads through `access`, changes state through `share`, writes mirrors through `store`, and renders through `views`. `main.py` should stay small enough to read in one screen.
+
+`ruff check`, `ruff format --check`, `mypy` (strict, over `app/`), and `pytest` run in CI on every pull request. The configuration is in `pyproject.toml`; the pins are in `requirements-dev.txt`.
 
 ---
 
@@ -391,8 +408,8 @@ These are unresolved on purpose. The first draft should not fake answers.
 **1. Does an edit to a shared writing need a new accept?**
 Today, edit-in-place is not built. When it is, two honest options: (a) edits flow into the already-shared object, or (b) an edit reverts the writing to `offered`. (a) is how letters get postscripts. (b) is how you prevent bait-and-switch. We should pick with the two users, not by defaulting to “sync.”
 
-**2. What does revoke mean after reading?**
-Access ends. Memory does not. Should the archive keep a “was shared, then withdrawn” stub so the history of the relationship is honest? v1 just hides. That may be too clean.
+**2. What does revoke mean after reading?** *(answered)*
+Access ends. Memory does not. The archive now keeps a line — title, dates, who returned it — for anything that was open and then returned, and nothing for what was never opened. See §7, *What a return leaves behind*. Still open inside it: whether the line should also name how long the page was open, and whether the author should be able to ask for the line to go too (today they cannot).
 
 **3. Should offered titles be blankable?**
 A title can leak. An option to offer as “A writing” with no title would be stricter.
@@ -403,8 +420,8 @@ The honest next architecture is: each person runs an instance (or a folder of ma
 **5. Chat after revoke of a topic.**
 If a topic returns to private, the chat history is still in SQLite. Who may export it? v1: only while the topic is shared, export includes chat. After revoke, counterpart export drops it. Author still has the db. This is inconsistent in spirit with “the record is the point.” Needs a rule.
 
-**6. Notifications.**
-Without them, an offer can sit unseen. With them, the app starts to feel like a messenger. Maybe a single quiet badge on home is enough.
+**6. Notifications.** *(answered)*
+A single quiet badge is enough — so long as it is true. The badge now follows a per-person stream instead of waiting for a reload, and the page you are on says in one line when the other person acted on it. Nothing from the margin, no list, no sound. See §9, *The one badge*. If the two people ever want more than that, it should be asked for, not assumed.
 
 **7. Third surfaces.**
 A future “read together” mode — both looking at a shared writing, commenting in the margin in real time — should still not punch a hole in private desks.
@@ -414,13 +431,11 @@ A future “read together” mode — both looking at a shared writing, commenti
 ## 17. Roadmap
 
 **Now (this draft, running)**
-Two users, three grains of consent, local markdown mirrors, shared chat after topic accept with presence and typing, archive/export of readable objects, an optional agent that drafts a private reply from the readable record only.
+Two users, three grains of consent, local markdown mirrors, shared chat after topic accept with presence and typing, archive/export of readable objects with a line for anything returned after it was opened, full-text search over the same readable record and a reading view for each topic, one live badge for sealed offers, an optional agent that drafts a private reply from the readable record only.
 
 **Next, still small**
 - Edit writings with an explicit rule from question 1
-- Withdrawal stub in the archive
 - Offer without a revealing title
-- Basic “you have N sealed offers” on home (already partly there)
 - Backup script for `data/`
 
 **Later, only if the two people need it**

@@ -312,7 +312,7 @@
           {% for m in topic.messages %}
             <div class="bubble{% if m.author == user %} mine{% endif %}{% if margin_grouped(m, loop.previtem) %} cont{% endif %}" data-author="{{ m.author }}" data-at="{{ m.created_at|epoch_ms }}">
               <div class="who">{{ display_for(m.author) }} · {{ m.created_at|when_tag }}</div>
-              <div>{{ m.body }}</div>
+              <div class="prose compact">{{ m.body|md|safe }}</div>
             </div>
           {% else %}
             <p id="chat-empty" class="chat-empty">Nothing in the margin yet. A few words are enough.</p>

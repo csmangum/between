@@ -9,8 +9,10 @@ import hmac
 import os
 import sys
 import time
+from collections.abc import MutableMapping
 from dataclasses import dataclass
-from typing import Any, MutableMapping
+from types import ModuleType
+from typing import Any
 
 SCRYPT_N = 2**14
 SCRYPT_R = 8
@@ -28,6 +30,14 @@ SESSION_USER = "user"
 SESSION_FINGERPRINT = "fp"
 SESSION_ISSUED = "iat"
 SESSION_SEEN = "seen"
+
+
+def _config() -> ModuleType:
+    """Deferred on purpose: importing `config` refuses to start without a real SECRET_KEY, and
+    `python -m app.auth` must be able to print a password hash before .env exists."""
+    from . import config
+
+    return config
 
 
 @dataclass(frozen=True)
@@ -82,14 +92,12 @@ def check_password(password: str, encoded: str) -> bool:
 
 def _deterministic_salt(username: str) -> bytes:
     """Plaintext env passwords are hashed in memory; a stable salt keeps session fingerprints stable."""
-    from . import config
-
-    return hmac.new(config.SECRET_KEY.encode("utf-8"), f"salt:{username}".encode("utf-8"), hashlib.sha256).digest()[:16]
+    key = _config().SECRET_KEY.encode("utf-8")
+    return hmac.new(key, f"salt:{username}".encode(), hashlib.sha256).digest()[:16]
 
 
 def _person(prefix: str) -> Person:
-    from . import config
-
+    config = _config()
     username = os.getenv(f"{prefix}_NAME", prefix.lower()).strip().lower()
     display = os.getenv(f"{prefix}_DISPLAY", username.title()).strip()
     encoded = os.getenv(f"{prefix}_PASSWORD_HASH", "").strip()
@@ -117,7 +125,7 @@ def load_people() -> dict[str, Person]:
         for prefix in ("USER1", "USER2"):
             p = _person(prefix)
             if p.username in loaded:
-                config.refuse("USER1_NAME and USER2_NAME must be different people.")
+                _config().refuse("USER1_NAME and USER2_NAME must be different people.")
             loaded[p.username] = p
         PEOPLE = loaded
     return PEOPLE
@@ -142,9 +150,7 @@ def display_for(username: str) -> str:
 def fingerprint(person: Person) -> str:
     """Changes when the password changes, so old sessions stop working. Keyed so the cookie
     (signed, not encrypted) does not carry an offline-crackable digest of the password."""
-    from . import config
-
-    mac = hmac.new(config.SECRET_KEY.encode("utf-8"), person.password_hash.encode("utf-8"), hashlib.sha256)
+    mac = hmac.new(_config().SECRET_KEY.encode("utf-8"), person.password_hash.encode("utf-8"), hashlib.sha256)
     return mac.hexdigest()[:24]
 
 
@@ -159,8 +165,7 @@ def start_session(session: MutableMapping[str, Any], person: Person) -> None:
 
 def session_user(session: MutableMapping[str, Any]) -> str | None:
     """Return the logged-in username if the session is still valid, else clear it."""
-    from . import config
-
+    config = _config()
     username = session.get(SESSION_USER)
     if not username:
         return None
@@ -179,7 +184,7 @@ def session_user(session: MutableMapping[str, Any]) -> str | None:
     seen = session.get(SESSION_SEEN)
     if not isinstance(seen, int) or now - seen >= config.SESSION_TOUCH_SECONDS:
         session[SESSION_SEEN] = now  # re-signs the cookie: sliding idle expiry
-    return username
+    return str(username)
 
 
 _DUMMY_HASH = hash_password("not-a-real-password", salt=b"\x00" * 16)

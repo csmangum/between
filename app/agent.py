@@ -127,7 +127,10 @@ def draft_reply(topic: Topic, user: str) -> str:
         response = client.post(f"{base}/chat/completions", json=payload, headers=headers)
         response.raise_for_status()
         data = response.json()
-    text = data["choices"][0]["message"]["content"].strip()
+    content = data["choices"][0]["message"]["content"]
+    if not isinstance(content, str):
+        raise RuntimeError("empty-reply")
+    text = content.strip()
     if not text:
         raise RuntimeError("empty-reply")
     return text

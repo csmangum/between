@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="/static/fonts.css">
   <link rel="stylesheet" href="/static/app.css">
 </head>
-<body data-user="{{ user or '' }}">
+<body data-user="{{ user or '' }}"{% if user %} data-me="{{ user }}" data-other="{{ other }}"{% endif %}>
   <a class="skip" href="#content">Skip to the page</a>
   <div class="wrap">
     <header class="topbar">
@@ -29,9 +29,6 @@
           <a href="/table" {% if path == '/table' %}aria-current="page"{% endif %}>Table</a>
           <a href="/archive" {% if path == '/archive' %}aria-current="page"{% endif %}>Kept</a>
           <span class="who">{{ display }}</span>
-        {% endif %}
-        {% include "theme_toggle.html" %}
-        {% if user %}
           <form method="post" action="/logout"><button class="ghost" type="submit">Leave</button></form>
         {% endif %}
       </nav>

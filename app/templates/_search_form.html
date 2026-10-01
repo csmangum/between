@@ -1,0 +1,9 @@
+{% macro search_form(q, autofocus=False) %}
+  <form class="find" method="get" action="/search" role="search">
+    <label class="find-label" for="find-q">Find in what you keep</label>
+    <div class="find-row">
+      <input id="find-q" name="q" type="search" value="{{ q or '' }}" maxlength="120" placeholder="A word or two" autocomplete="off" spellcheck="false" {% if autofocus %}autofocus{% endif %}>
+      <button type="submit" class="ghost">Find</button>
+    </div>
+  </form>
+{% endmacro %}

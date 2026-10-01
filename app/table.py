@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal, assert_never
 
 from .models import ChatMessage, Comment, Topic, Writing
@@ -22,9 +22,9 @@ def excerpt(text: str, limit: int = EXCERPT_LEN) -> str:
 
 def _aware(value: datetime | None) -> datetime:
     if value is None:
-        return datetime.min.replace(tzinfo=timezone.utc)
+        return datetime.min.replace(tzinfo=UTC)
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
+        return value.replace(tzinfo=UTC)
     return value
 
 

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_search_form.html" import search_form %}
+{% block title %}{% if q %}“{{ q }}” · {% endif %}Find · {{ app_name }}{% endblock %}
+{% block body %}
+<section class="hero">
+  <p class="meta"><a href="/archive">← Kept</a></p>
+  <h1>Find</h1>
+  <p class="lede">Only what you can already read: your own pages, and what you both opened. Nothing sealed, nothing on the other desk.</p>
+  {{ search_form(q, autofocus=not hits) }}
+</section>
+
+{% if asked %}
+  <p class="meta find-count">{{ hits|length|count_label("place") }} where “{{ q }}” appears{% if hits|length >= 60 %} — the first sixty{% endif %}</p>
+  <div class="hits">
+    {% for h in hits %}
+      <a class="hit" href="{{ h.href }}">
+        <div class="hit-head">
+          <span class="hit-kind">{% if h.kind == 'writing' %}page{% elif h.kind == 'comment' %}note{% elif h.kind == 'chat' %}margin{% else %}topic{% endif %}</span>
+          <span class="hit-topic">{{ h.topic_title }}</span>
+        </div>
+        {% if h.title %}<h3>{{ h.title }}</h3>{% endif %}
+        {% if h.excerpt %}<p class="hit-excerpt">{{ h.excerpt }}</p>{% endif %}
+        <div class="counts">
+          <span>{{ display_for(h.author) }}</span>
+          <span>{{ h.when|when_soft }}</span>
+        </div>
+      </a>
+    {% else %}
+      <p class="empty">Nothing you keep says “{{ q }}”. Try a shorter word; the first letters are enough.</p>
+    {% endfor %}
+  </div>
+{% elif q %}
+  <p class="empty">Type a word or two.</p>
+{% endif %}
+{% endblock %}

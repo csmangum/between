@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-from app.main import count_label, fmt_dt_soft
 from app.markdown_render import render_markdown
+from app.views import count_label, fmt_dt_soft
 
 
 def _login(client, username: str, password: str) -> None:
@@ -12,7 +12,7 @@ def _login(client, username: str, password: str) -> None:
 
 
 def test_soft_time_uses_the_room_voice():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     yesterday = (now.astimezone() - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
     assert fmt_dt_soft(None) == ""
     assert fmt_dt_soft(now) == "just now"

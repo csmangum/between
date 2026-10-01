@@ -98,17 +98,13 @@ def write_local(topic: Topic, writing: Writing | None = None, comment: Comment |
         if comment is not None:
             path = folder / f"comment-{comment.id}.md"
             path.write_text(
-                f"_author: {comment.author}_\n"
-                f"_status: {comment.share_status}_\n\n"
-                f"{comment.body}\n",
+                f"_author: {comment.author}_\n_status: {comment.share_status}_\n\n{comment.body}\n",
                 encoding="utf-8",
             )
             return path
         path = folder / "topic.md"
         path.write_text(
-            f"# {topic.title}\n\n"
-            f"_status: {topic.share_status}_\n\n"
-            f"{topic.prompt or ''}\n",
+            f"# {topic.title}\n\n_status: {topic.share_status}_\n\n{topic.prompt or ''}\n",
             encoding="utf-8",
         )
         return path
@@ -135,9 +131,7 @@ def write_shared(topic: Topic, writing: Writing | None = None, comment: Comment 
             return None
         path = _stable_writing_path(folder, writing)
         path.write_text(
-            f"# {writing.title or 'Untitled writing'}\n\n"
-            f"_author: {writing.author}_\n\n"
-            f"{writing.body}\n",
+            f"# {writing.title or 'Untitled writing'}\n\n_author: {writing.author}_\n\n{writing.body}\n",
             encoding="utf-8",
         )
         return path
