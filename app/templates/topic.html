@@ -52,6 +52,7 @@
   {% if topic.share_status == 'shared' and topic.accepted_at %}
     · <span class="kept-since">opened together {{ topic.accepted_at|when_soft }}</span>
   {% endif %}
+  · <a class="read-link" href="/topics/{{ topic.id }}/read">Read it through</a>
 </p>
 
 {% if awaiting %}

@@ -22,6 +22,7 @@
       {% if t.share_status == 'shared' and t.accepted_at %}
         <span class="kept-since"> · opened together {{ t.accepted_at|when_soft }}</span>
       {% endif %}
+      · <a class="read-link" href="/topics/{{ t.id }}/read">Read it through</a>
     </p>
 
     {% for w in t.writings %}
