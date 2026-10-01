@@ -4,6 +4,7 @@
   const input = document.getElementById("chat-body");
   const presence = document.getElementById("presence");
   const limit = document.getElementById("chat-limit");
+  const newPill = document.getElementById("chat-new");
   if (!log || !form || !input || !presence) return;
   const config = {
     topicId: log.dataset.topicId,
@@ -14,6 +15,7 @@
 
   const maxLength = 4000;
   const proto = location.protocol === "https:" ? "wss" : "ws";
+  const baseTitle = document.title;
   let ws = null;
   let typingTimer = null;
   let typingOn = false;
@@ -22,6 +24,8 @@
   const pending = [];
   const pendingBubbles = [];
   let reconnectTimer = null;
+  let unseenBelow = 0;
+  let unseenWhileAway = 0;
 
   function joinNames(names) {
     if (names.length <= 1) return names[0] || "";
@@ -29,9 +33,62 @@
     return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   }
 
+  /* Scroll position and what has not been seen yet */
+
+  function nearBottom() {
+    return log.scrollHeight - log.scrollTop - log.clientHeight < 48;
+  }
+
+  function scrollToEnd() {
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function showPill() {
+    if (!newPill) return;
+    newPill.textContent = unseenBelow === 1 ? "A new line below" : `${unseenBelow} new lines below`;
+    newPill.hidden = false;
+  }
+
+  function hidePill() {
+    unseenBelow = 0;
+    if (newPill) newPill.hidden = true;
+  }
+
+  function markTitle() {
+    document.title = unseenWhileAway ? `(${unseenWhileAway}) ${baseTitle}` : baseTitle;
+  }
+
+  log.addEventListener("scroll", () => {
+    if (nearBottom()) hidePill();
+  });
+  if (newPill) {
+    newPill.addEventListener("click", () => {
+      scrollToEnd();
+      hidePill();
+    });
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      unseenWhileAway = 0;
+      markTitle();
+    }
+  });
+
+  /* Bubbles */
+
+  function lastBubble() {
+    const bubbles = log.querySelectorAll(".bubble");
+    return bubbles.length ? bubbles[bubbles.length - 1] : null;
+  }
+
   function addBubble(msg, pendingMessage) {
+    const mine = msg.author === config.me;
+    const wasNearBottom = nearBottom();
+    const previous = lastBubble();
     const el = document.createElement("div");
-    el.className = "bubble" + (msg.author === config.me ? " mine" : "");
+    el.className = "bubble" + (mine ? " mine" : "");
+    el.dataset.author = msg.author;
+    if (previous && previous.dataset.author === msg.author) el.classList.add("cont");
     if (pendingMessage) el.classList.add("pending");
     const who = document.createElement("div");
     who.className = "who";
@@ -40,8 +97,18 @@
     body.textContent = msg.body;
     el.append(who, body);
     log.appendChild(el);
-    log.scrollTop = log.scrollHeight;
     if (pendingMessage) pendingBubbles.push({ body: msg.body, el });
+
+    if (mine || wasNearBottom) {
+      scrollToEnd();
+    } else {
+      unseenBelow += 1;
+      showPill();
+    }
+    if (!mine && document.hidden) {
+      unseenWhileAway += 1;
+      markTitle();
+    }
   }
 
   function settlePending(msg) {
@@ -54,6 +121,8 @@
     if (who) who.textContent = `${msg.display} · ${msg.created_at}`;
     return true;
   }
+
+  /* Presence */
 
   function showPresence(msg) {
     const here = (msg.here || []).map((person) => person.display).filter(Boolean);
@@ -77,6 +146,8 @@
     typingOn = on;
     ws.send(JSON.stringify({ type: "typing", on }));
   }
+
+  /* The line to the room */
 
   function flushPending() {
     while (pending.length && ws && ws.readyState === 1) {
@@ -138,6 +209,8 @@
     });
   }
 
+  /* Composing */
+
   function updateLimit() {
     if (!limit) return;
     const left = maxLength - input.value.length;
@@ -188,6 +261,6 @@
     if (ws) ws.close();
   });
 
-  log.scrollTop = log.scrollHeight;
+  scrollToEnd();
   connect();
 })();

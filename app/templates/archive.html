@@ -17,7 +17,7 @@
     <p class="meta">
       <span class="badge {{ t.share_status }}">{{ t.share_status|share_label }}</span>
       {% if t.share_status == 'shared' and t.accepted_at %}
-        <span class="kept-since"> · opened together {{ t.accepted_at|when_soft }}</span>
+        <span class="kept-since"> · opened together {{ t.accepted_at|when_tag }}</span>
       {% endif %}
     </p>
 
@@ -25,10 +25,12 @@
       {% if w.author == user or w.share_status == 'shared' %}
         <article class="writing">
           <div class="author-chip">
-            {{ display_for(w.author) }} · {{ w.created_at|when_soft }}
+            {{ display_for(w.author) }} · {{ w.created_at|when_tag }}
             {% if w.share_status == 'shared' and w.accepted_at %}
-              · kept {{ w.accepted_at|when_soft }}
+              · kept {{ w.accepted_at|when_tag }}
             {% endif %}
+            {% set read = w.body|reading_time %}
+            {% if read %}· <span class="reading-time">{{ read }}</span>{% endif %}
           </div>
           <h3>{{ w.title or "Untitled writing" }}</h3>
           <div class="prose">{{ w.body|md|safe }}</div>
@@ -39,7 +41,7 @@
     {% for c in t.comments if c.author == user or c.share_status == 'shared' %}
       {% if loop.first %}<div class="comments"><p class="meta">Notes</p>{% endif %}
       <div class="comment">
-        <div class="author-chip">{{ display_for(c.author) }} · {{ c.created_at|when_soft }}</div>
+        <div class="author-chip">{{ display_for(c.author) }} · {{ c.created_at|when_tag }}</div>
         <div class="body">{{ c.body }}</div>
       </div>
       {% if loop.last %}</div>{% endif %}
@@ -50,7 +52,7 @@
         <p class="meta">In the margin</p>
         {% for m in t.messages %}
           <div class="comment">
-            <div class="author-chip">{{ display_for(m.author) }} · {{ m.created_at|when_soft }}</div>
+            <div class="author-chip">{{ display_for(m.author) }} · {{ m.created_at|when_tag }}</div>
             <div class="body">{{ m.body }}</div>
           </div>
         {% endfor %}

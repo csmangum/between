@@ -21,7 +21,7 @@
             <p class="prompt">{{ m.excerpt }}</p>
             <div class="counts">
               <span>{{ display_for(m.author) }}</span>
-              <span>{{ m.at|when_soft }}</span>
+              <span>{{ m.at|when_tag }}</span>
             </div>
           </a>
         {% endfor %}
@@ -39,7 +39,7 @@
           <p class="meta">
             <span class="badge shared">kept between you</span>
             {% if card.accepted_at %}
-              <span class="kept-since"> · opened together {{ card.accepted_at|when_soft }}</span>
+              <span class="kept-since"> · opened together {{ card.accepted_at|when_tag }}</span>
             {% endif %}
           </p>
 
@@ -48,7 +48,7 @@
               <p class="kind">Latest writing</p>
               <h4>{{ card.latest_writing.heading }}</h4>
               <p class="prompt">{{ card.latest_writing.excerpt }}</p>
-              <p class="meta">{{ display_for(card.latest_writing.author) }} · {{ card.latest_writing.at|when_soft }}</p>
+              <p class="meta">{{ display_for(card.latest_writing.author) }} · {{ card.latest_writing.at|when_tag }}</p>
             </a>
           {% endif %}
 
@@ -56,7 +56,7 @@
             <a class="table-highlight" href="{{ card.latest_margin.href }}">
               <p class="kind">Latest in the margin</p>
               <p class="prompt">{{ card.latest_margin.excerpt }}</p>
-              <p class="meta">{{ display_for(card.latest_margin.author) }} · {{ card.latest_margin.at|when_soft }}</p>
+              <p class="meta">{{ display_for(card.latest_margin.author) }} · {{ card.latest_margin.at|when_tag }}</p>
             </a>
           {% endif %}
 
@@ -66,7 +66,7 @@
                 <a class="table-waiting-item" href="{{ w.href }}">
                   <span class="badge offered">sealed</span>
                   <span>{{ w.title }}</span>
-                  <span class="meta">from {{ display_for(w.author) }}{% if w.at %} · {{ w.at|when_soft }}{% endif %} — waiting for you</span>
+                  <span class="meta">from {{ display_for(w.author) }}{% if w.at %} · {{ w.at|when_tag }}{% endif %} — waiting for you</span>
                 </a>
               {% endfor %}
             </div>
