@@ -1138,7 +1138,7 @@ mark {
 }
 .reading-page > .meta { margin-bottom: 18px; }
 .reading .prose { font-size: 19px; line-height: 1.75; max-width: none; }
-.reading-page:target h2 { color: var(--accent); }
+.reading-page:target > h2 { color: var(--accent); }
 .reading-notes, .reading-aside, .reading-margin {
   margin: 22px 0 0;
   padding: 4px 0 4px 18px;
@@ -1363,7 +1363,10 @@ body.desk-focus :has(.desk-editor.is-focus) { animation: none; transform: none; 
     display: none !important;
   }
   .wrap { max-width: none; padding: 0; }
-  .hero h1, .page-title, .prose, .archive-topic h2, .reading-page h2, .reading .eyebrow, a { color: #1a1308; }
+  .hero h1, .page-title, .prose, .prose strong, .archive-topic h2, .reading-page h2, .reading .eyebrow, a {
+    color: #1a1308;
+  }
+  .prose blockquote, .lede, .prompt { color: #444; }
   .meta, .reading-note > .meta { color: #555; }
   .prose { max-width: none; }
   .writing, .reading-page, .reading-note { break-inside: avoid; border-color: #ddd; }

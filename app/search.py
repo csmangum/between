@@ -28,8 +28,8 @@ MAX_TERMS = 8
 MAX_QUERY_CHARS = 120
 START, END = "\x01", "\x02"
 TERM = re.compile(r"[\w'’-]+", re.UNICODE)
-# Emphasis, code and heading marks, plus '>' only where it opens a blockquote line.
-MARKUP_NOISE = re.compile(r"[*`#]+|(?<!\w)_+|_+(?!\w)|^[ \t]*>+[ \t]?", re.MULTILINE)
+# Emphasis, code and heading marks anywhere; blockquote and list marks only where they open a line.
+MARKUP_NOISE = re.compile(r"[*`#]+|(?<!\w)_+|_+(?!\w)|^[ \t]*(?:>+|[-+]|\d+\.)[ \t]?", re.MULTILINE)
 
 # kind, table, title expression, body expression
 SOURCES: tuple[tuple[Kind, str, str, str], ...] = (

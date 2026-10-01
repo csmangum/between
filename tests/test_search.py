@@ -63,8 +63,8 @@ def test_anything_typed_becomes_a_safe_prefix_query():
 
 
 def test_excerpt_escapes_html_and_marks_the_match():
-    out = search.excerpt("a <b>bold</b> \x01river\x02 & **more** `code`\n\n# heading")
-    assert str(out) == "a &lt;b&gt;bold&lt;/b&gt; <mark>river</mark> &amp; more code heading"
+    out = search.excerpt("a <b>bold</b> \x01river\x02 & **more** `code`\n\n# heading\n- gate\n2. post\n> quiet x-ray")
+    assert str(out) == "a &lt;b&gt;bold&lt;/b&gt; <mark>river</mark> &amp; more code heading gate post quiet x-ray"
 
 
 # --- the index follows the tables -------------------------------------------------------------
