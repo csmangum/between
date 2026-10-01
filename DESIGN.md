@@ -241,6 +241,7 @@ Implications, stated plainly:
 - `data/local/a/` is not cryptographically closed to `b` if `b` has filesystem access.
 - “Stored locally” in v1 means “stored on this machine, namespaced by author, not shown in the other person’s UI until accept.”
 - It does **not** yet mean “the bytes never leave my device.”
+- A page still being typed is also held in that person’s browser (`localStorage`, keyed by page and field) until the server confirms the save. It is the author’s device, it is never sent to the counterpart, and it is cleared once the words are kept.
 
 The markdown split (`local/` vs `shared/`) exists so the intended boundary is visible on disk, not only in SQL. If we later encrypt per-user, those directories are the natural unit.
 

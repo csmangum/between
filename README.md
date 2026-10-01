@@ -69,6 +69,10 @@ data/
 
 The markdown mirrors are a convenience so the boundary is visible on disk. `MARKDOWN_MIRROR=false` keeps everything in SQLite only.
 
+What you are still typing is kept in your own browser's local storage until the server confirms it was saved, so a dropped connection or an expired session does not lose the page. It never leaves the device, and it is cleared once the words are on your desk.
+
+Times are shown on your clock, not the server's. Exports are labeled UTC.
+
 Archive and export only include what *you* are allowed to read: your private pages plus anything both of you accepted.
 
 ## What the other person can see before opening
