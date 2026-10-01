@@ -12,7 +12,7 @@ from ..db import SessionLocal
 from ..hub import hub
 from ..markdown_render import render_markdown
 from ..models import ChatMessage, Topic, utcnow
-from ..views import iso_utc
+from ..views import epoch_ms, iso_utc
 
 log = logging.getLogger("between")
 
@@ -81,6 +81,7 @@ async def topic_chat(websocket: WebSocket, topic_id: int) -> None:
                     "body": msg.body,
                     "html": render_markdown(msg.body),
                     "created_at": iso_utc(msg.created_at),
+                    "created_at_epoch_ms": epoch_ms(msg.created_at),
                 },
             )
             await hub.broadcast_presence(topic_id)

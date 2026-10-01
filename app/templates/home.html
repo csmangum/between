@@ -87,7 +87,7 @@
   <aside class="panel compose-panel">
     <h2 class="compose-title">Begin quietly</h2>
     <p class="panel-note">Starts on your desk alone. Stored under <code>data/local/{{ user }}</code>.</p>
-    <form method="post" action="/topics">
+    <form method="post" action="/topics" data-keep="topic-new">
       <label for="title">Title</label>
       <input id="title" name="title" type="text" required placeholder="A place for this thought" data-desk {% if not desk and not table_count and not incoming %}autofocus{% endif %}>
       <label for="prompt">Opening note</label>

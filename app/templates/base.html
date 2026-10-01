@@ -32,6 +32,7 @@
           <form method="post" action="/logout"><button class="ghost" type="submit">Leave</button></form>
         {% endif %}
       </nav>
+      {% include "theme_toggle.html" %}
     </header>
     {% if flashes %}
       <div class="flashes" aria-live="polite">

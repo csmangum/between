@@ -4,7 +4,15 @@
     <span class="returned-title">{% if s.kind == 'comment' %}A note{% elif s.kind == 'topic' %}{{ s.topic_title }}{% else %}{{ s.title or "Untitled writing" }}{% endif %}</span>
     <span class="returned-meta">
       {% if s.opened_at %}open between you from {{ s.opened_at|when_soft }} · {% endif %}
-      {% if s.actor == s.author %}{{ display_for(s.author) }} returned it to their desk {{ s.withdrawn_at|when_soft }}{% else %}returned to {{ display_for(s.author) }}'s desk {{ s.withdrawn_at|when_soft }}, when you returned the topic{% endif %}
+      {% if s.actor == s.author %}
+        {% if s.kind == 'topic' %}
+          when {{ display_for(s.author) }} returned it to their desk {{ s.withdrawn_at|when_soft }}
+        {% else %}
+          {{ display_for(s.author) }} returned it to their desk {{ s.withdrawn_at|when_soft }}
+        {% endif %}
+      {% else %}
+        returned to {{ display_for(s.author) }}'s desk {{ s.withdrawn_at|when_soft }}, when you returned the topic
+      {% endif %}
     </span>
   </li>
 {% endmacro %}

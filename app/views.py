@@ -83,6 +83,35 @@ def fmt_dt_soft(value: datetime | None) -> str:
     return local.strftime("%b %d, %Y")
 
 
+def when_tag(value: datetime | None) -> Markup:
+    if not value:
+        return Markup("")
+    return Markup('<time datetime="{iso}" title="{exact}">{soft}</time>').format(
+        iso=iso_utc(value), exact=fmt_dt(value), soft=fmt_dt_soft(value)
+    )
+
+
+def epoch_ms(value: datetime | None) -> int:
+    if not value:
+        return 0
+    return int(aware(value).timestamp() * 1000)
+
+
+def reading_time(text: str | None) -> str:
+    words = len((text or "").split())
+    if not words:
+        return ""
+    if words < 200:
+        return "under a minute"
+    return f"{(words + 100) // 200} min read"
+
+
+def margin_grouped(message: Any, previous: Any) -> bool:
+    if not previous or message.author != previous.author:
+        return False
+    return epoch_ms(message.created_at) - epoch_ms(previous.created_at) < 300 * 1000
+
+
 def count_label(n: int, singular: str, plural: str | None = None) -> str:
     number = int(n or 0)
     word = singular if number == 1 else (plural or f"{singular}s")
@@ -109,6 +138,10 @@ def when_soft(value: datetime | None) -> Markup:
 templates.env.filters["md"] = md
 templates.env.filters["when"] = when
 templates.env.filters["when_soft"] = when_soft
+templates.env.filters["when_tag"] = when_tag
+templates.env.filters["reading_time"] = reading_time
+templates.env.filters["epoch_ms"] = epoch_ms
+templates.env.globals["margin_grouped"] = margin_grouped
 templates.env.filters["count_label"] = count_label
 templates.env.filters["share_label"] = share.label
 templates.env.globals["app_name"] = APP_NAME

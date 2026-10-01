@@ -69,6 +69,7 @@ def topic_page(request: Request, topic_id: int, db: Session = Depends(get_db)) -
         removable_writings={w.id for w in visible_writings if access.writing_removable(user, w)},
         removable_comments={c.id for c in topic.comments if access.comment_removable(user, c)},
         awaiting=awaiting,
+        returned=returned,
         returned_topic=next((s for s in returned if s.kind == "topic"), None),
         returned_writings=[s for s in returned if s.kind == "writing"],
         returned_notes=[s for s in returned if s.kind == "comment"],
@@ -149,7 +150,7 @@ async def revoke_topic(request: Request, topic_id: int, db: Session = Depends(ge
         events.tell(db, user, "returned", topic.id)
         if was_open:
             other = other_display(user)
-            flash(request, f"Pulled back. {other} keeps a note that it was open between you, not the pages.")
+            flash(request, f"Pulled back. {other} keeps a note that it was open, not the page.")
         else:
             flash(request, "Pulled back. Everything inside returned to the desk it came from.")
     return RedirectResponse(f"/topics/{topic_id}", status_code=303)

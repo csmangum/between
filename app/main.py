@@ -19,7 +19,13 @@ from .db import Base, db_ok, engine, migrate
 from .events import stream
 from .routes import routers
 from .security import SameOriginMiddleware, SecurityHeadersMiddleware
-from .views import APP_NAME, BASE_DIR, RedirectNeeded, current_user, render
+from .views import (
+    APP_NAME,
+    BASE_DIR,
+    RedirectNeeded,
+    current_user,
+    render,
+)
 
 
 def init_db() -> None:
