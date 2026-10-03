@@ -1,4 +1,8 @@
-"""The two people, their passwords, and the session fields that prove a login is still good."""
+"""The two people, their passwords, and the session fields that prove a login is still good.
+
+An optional admin login can act as either person and switch between them. It is not a third
+person in the room, and it exists only when ADMIN_PASSWORD_HASH or ADMIN_PASSWORD is set.
+"""
 
 from __future__ import annotations
 
@@ -28,6 +32,8 @@ SESSION_USER = "user"
 SESSION_FINGERPRINT = "fp"
 SESSION_ISSUED = "iat"
 SESSION_SEEN = "seen"
+SESSION_ADMIN = "adm"
+ADMIN_USERNAME = "admin"
 
 
 @dataclass(frozen=True)
@@ -87,45 +93,101 @@ def _deterministic_salt(username: str) -> bytes:
     return hmac.new(config.SECRET_KEY.encode("utf-8"), f"salt:{username}".encode("utf-8"), hashlib.sha256).digest()[:16]
 
 
-def _person(prefix: str) -> Person:
+def _encoded_password(prefix: str, username: str, *, required: bool) -> str | None:
+    """Hash from `{prefix}_PASSWORD_HASH`, or from a plaintext `{prefix}_PASSWORD`.
+
+    Empty means unset. A required account refuses to start; the admin login does not exist.
+    """
     from . import config
 
-    username = os.getenv(f"{prefix}_NAME", prefix.lower()).strip().lower()
-    display = os.getenv(f"{prefix}_DISPLAY", username.title()).strip()
     encoded = os.getenv(f"{prefix}_PASSWORD_HASH", "").strip()
     raw = os.getenv(f"{prefix}_PASSWORD", "").strip()
     if encoded:
         if not encoded.startswith("scrypt$"):
             config.refuse(f"{prefix}_PASSWORD_HASH is not a value produced by `python -m app.auth`.")
-    elif raw in config.SAMPLE_SECRETS:
+        return encoded
+    if not raw:
+        if required:
+            config.refuse(
+                f"{prefix}_PASSWORD_HASH (preferred) or {prefix}_PASSWORD must be set to a real value. "
+                "Generate a hash with `python -m app.auth`."
+            )
+        return None
+    if raw in config.SAMPLE_SECRETS:
         config.refuse(
             f"{prefix}_PASSWORD_HASH (preferred) or {prefix}_PASSWORD must be set to a real value. "
             "Generate a hash with `python -m app.auth`."
         )
-    else:
-        encoded = hash_password(raw, salt=_deterministic_salt(username))
+    return hash_password(raw, salt=_deterministic_salt(username))
+
+
+def _person(prefix: str) -> Person:
+    username = os.getenv(f"{prefix}_NAME", prefix.lower()).strip().lower()
+    display = os.getenv(f"{prefix}_DISPLAY", username.title()).strip()
+    encoded = _encoded_password(prefix, username, required=True)
+    if encoded is None:
+        raise AssertionError(f"{prefix} password was required")
     return Person(username=username, display=display, password_hash=encoded)
 
 
 PEOPLE: dict[str, Person] = {}
+_PRIMARY_USER = ""
+_ADMIN: Person | None = None
+_ADMIN_LOADED = False
+
+
+def admin_person() -> Person | None:
+    """The operator login, or None when no admin secret is configured.
+
+    Plaintext secrets use the same secret-derived salt as a person's env password, so the
+    session fingerprint stays stable until that secret changes.
+    """
+    global _ADMIN, _ADMIN_LOADED
+    if not _ADMIN_LOADED:
+        encoded = _encoded_password("ADMIN", ADMIN_USERNAME, required=False)
+        _ADMIN = Person(username=ADMIN_USERNAME, display="Admin", password_hash=encoded) if encoded else None
+        _ADMIN_LOADED = True
+    return _ADMIN
 
 
 def load_people() -> dict[str, Person]:
-    global PEOPLE
+    global PEOPLE, _PRIMARY_USER
     if not PEOPLE:
+        from . import config
+
         loaded: dict[str, Person] = {}
+        primary = ""
         for prefix in ("USER1", "USER2"):
             p = _person(prefix)
+            if p.username == ADMIN_USERNAME:
+                config.refuse(f"{prefix}_NAME cannot be {ADMIN_USERNAME}.")
             if p.username in loaded:
                 config.refuse("USER1_NAME and USER2_NAME must be different people.")
+            if prefix == "USER1":
+                primary = p.username
             loaded[p.username] = p
+        _PRIMARY_USER = primary
         PEOPLE = loaded
+        admin_person()
     return PEOPLE
+
+
+def primary_username() -> str:
+    """The person an admin session acts as until they switch. This is USER1."""
+    load_people()
+    return _PRIMARY_USER
 
 
 def verify(username: str, password: str) -> Person | None:
     people = load_people()
-    person = people.get(username.strip().lower())
+    name = username.strip().lower()
+    if name == ADMIN_USERNAME:
+        person = admin_person()
+        if person is None:
+            check_password(password, _DUMMY_HASH)
+            return None
+        return person if check_password(password, person.password_hash) else None
+    person = people.get(name)
     if not person:
         # Burn the same work as a real check so unknown names are not faster.
         check_password(password, _DUMMY_HASH)
@@ -148,31 +210,63 @@ def fingerprint(person: Person) -> str:
     return mac.hexdigest()[:24]
 
 
+def _digest_ok(got: object, expected: str) -> bool:
+    return isinstance(got, str) and len(got) == len(expected) and hmac.compare_digest(got, expected)
+
+
+def is_admin_session(session: MutableMapping[str, Any]) -> bool:
+    admin = admin_person()
+    if admin is None:
+        return False
+    return _digest_ok(session.get(SESSION_ADMIN), fingerprint(admin))
+
+
 def start_session(session: MutableMapping[str, Any], person: Person) -> None:
     now = int(time.time())
     session.clear()
-    session[SESSION_USER] = person.username
-    session[SESSION_FINGERPRINT] = fingerprint(person)
+    if person.username == ADMIN_USERNAME:
+        session[SESSION_USER] = primary_username()
+        admin_fp = fingerprint(person)
+        session[SESSION_FINGERPRINT] = admin_fp
+        session[SESSION_ADMIN] = admin_fp
+    else:
+        session[SESSION_USER] = person.username
+        session[SESSION_FINGERPRINT] = fingerprint(person)
     session[SESSION_ISSUED] = now
     session[SESSION_SEEN] = now
 
 
+def switch_profile(session: MutableMapping[str, Any], username: str) -> bool:
+    """Move an admin session onto one of the two people. Anyone else stays where they are."""
+    if not is_admin_session(session):
+        return False
+    name = username.strip().lower()
+    if name not in load_people():
+        return False
+    session[SESSION_USER] = name
+    return True
+
+
 def session_user(session: MutableMapping[str, Any]) -> str | None:
-    """Return the logged-in username if the session is still valid, else clear it."""
+    """Return the logged-in username if the session is still valid, else clear it.
+
+    An admin session returns the person they are acting as, not the admin name.
+    """
     from . import config
 
     username = session.get(SESSION_USER)
     if not username:
         return None
-    person = load_people().get(username)
+    people = load_people()
     issued = session.get(SESSION_ISSUED)
     now = int(time.time())
-    valid = (
-        person is not None
-        and isinstance(issued, int)
-        and now - issued <= config.SESSION_ABSOLUTE_SECONDS
-        and hmac.compare_digest(str(session.get(SESSION_FINGERPRINT, "")), fingerprint(person))
-    )
+    admin = admin_person()
+    if admin is not None and is_admin_session(session):
+        identity_ok = username in people and _digest_ok(session.get(SESSION_FINGERPRINT), fingerprint(admin))
+    else:
+        person = people.get(username)
+        identity_ok = person is not None and _digest_ok(session.get(SESSION_FINGERPRINT), fingerprint(person))
+    valid = identity_ok and isinstance(issued, int) and now - issued <= config.SESSION_ABSOLUTE_SECONDS
     if not valid:
         session.clear()
         return None

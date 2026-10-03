@@ -71,8 +71,9 @@ Set:
 | `USER2_NAME` / `USER2_DISPLAY` | `karin` / `Karin` |
 | `USER2_PASSWORD_HASH` | the `scrypt$…` line for Karin |
 | `SECRET_KEY` | the random string |
+| `ADMIN_PASSWORD_HASH` | optional. A `scrypt$…` line for the name `admin`, which can then act as either person. Leave it unset and that login does not exist. |
 
-Changing a hash later signs that person out everywhere; changing `SECRET_KEY` signs everyone out.
+Changing a person's hash signs that person out. Changing `ADMIN_PASSWORD_HASH` signs the admin session out and leaves the two people signed in. Changing `SECRET_KEY` signs everyone out.
 
 ## 3. Start it
 

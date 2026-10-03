@@ -17,9 +17,13 @@ os.environ["SECRET_KEY"] = "test-secret-key-that-is-long-enough-for-the-startup-
 os.environ["USER1_NAME"] = "chris"
 os.environ["USER1_DISPLAY"] = "Chris"
 os.environ["USER1_PASSWORD"] = "pass1"
+os.environ["USER1_PASSWORD_HASH"] = ""
 os.environ["USER2_NAME"] = "friend"
 os.environ["USER2_DISPLAY"] = "Friend"
 os.environ["USER2_PASSWORD"] = "pass2"
+os.environ["USER2_PASSWORD_HASH"] = ""
+os.environ["ADMIN_PASSWORD"] = ""
+os.environ["ADMIN_PASSWORD_HASH"] = ""
 
 from app.db import Base, engine, get_db  # noqa: E402
 from app.hub import hub  # noqa: E402

@@ -296,6 +296,7 @@ def ctx(request: Request, db: Session | None = None, **extra: Any) -> dict[str, 
     return {
         "request": request,
         "user": user,
+        "admin": bool(user) and auth.is_admin_session(request.session),
         "display": auth.display_for(user) if user else None,
         "other": next((p.display for name, p in people.items() if name != user), None) if user else None,
         "other_user": access.other_username(user) if user else None,
@@ -385,6 +386,37 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
 def logout(request: Request):
     request.session.clear()
     return RedirectResponse("/login", status_code=303)
+
+
+def _safe_return(target: str) -> str:
+    """A same-origin path from the switch form. Anything else goes back to the desk."""
+    target = target.strip()
+    # urlsplit drops CR/LF/TAB before parsing, which would hide them inside a path.
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in target):
+        return "/"
+    parts = urlsplit(target)
+    if parts.scheme or parts.netloc:
+        return "/"
+    path = parts.path or "/"
+    if not path.startswith("/") or path.startswith("//") or "\\" in path or "\\" in parts.query:
+        return "/"
+    if parts.query:
+        return f"{path}?{parts.query}"
+    return path
+
+
+@app.post("/switch")
+def switch_profile(request: Request, username: str = Form(...), return_to: str = Form("")):
+    user = auth.session_user(request.session)
+    if user and auth.switch_profile(request.session, username):
+        log.warning(
+            "admin switch from=%s to=%s ip=%s",
+            user,
+            request.session.get(auth.SESSION_USER),
+            client_ip(request),
+        )
+        return RedirectResponse(_safe_return(return_to), status_code=303)
+    return RedirectResponse("/" if user else "/login", status_code=303)
 
 
 def _visible_topics(db: Session, user: str) -> list[Topic]:

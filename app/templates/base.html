@@ -28,7 +28,20 @@
           {% endif %}
           <a href="/table" {% if path == '/table' %}aria-current="page"{% endif %}>Table</a>
           <a href="/archive" {% if path == '/archive' %}aria-current="page"{% endif %}>Kept</a>
-          <span class="who">{{ display }}</span>
+          {% if admin %}
+            <div class="profile-switch" role="group" aria-label="Acting as">
+              <span class="acting-as" aria-hidden="true">Acting as</span>
+              {% for name, person in people.items() %}
+                <form method="post" action="/switch">
+                  <input type="hidden" name="username" value="{{ name }}">
+                  <input type="hidden" name="return_to" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+                  <button type="submit" aria-pressed="{{ 'true' if name == user else 'false' }}">{{ person.display }}</button>
+                </form>
+              {% endfor %}
+            </div>
+          {% else %}
+            <span class="who">{{ display }}</span>
+          {% endif %}
           <form method="post" action="/logout"><button class="ghost" type="submit">Leave</button></form>
         {% endif %}
       </nav>
