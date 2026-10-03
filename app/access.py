@@ -4,7 +4,7 @@ from sqlalchemy import select, union
 from sqlalchemy.orm import Session
 
 from . import auth
-from .models import ChatMessage, Comment, Topic, Writing
+from .models import ChatMessage, Comment, Topic, Withdrawal, Writing
 
 
 def other_username(user: str) -> str | None:
@@ -105,8 +105,7 @@ def writing_removable(user: str, writing: Writing) -> bool:
     if writing.author != user or writing.share_status != "private" or writing.revision_status:
         return False
     return not any(
-        c.writing_id == writing.id and (c.author != user or c.share_status != "private")
-        for c in writing.topic.comments
+        c.writing_id == writing.id and (c.author != user or c.share_status != "private") for c in writing.topic.comments
     )
 
 
@@ -114,6 +113,11 @@ def comment_removable(user: str, comment: Comment) -> bool:
     if comment.author != user or comment.share_status != "private":
         return False
     return not any(c.parent_id == comment.id for c in comment.topic.comments)
+
+
+def withdrawal_visible(user: str, stub: Withdrawal) -> bool:
+    """A stub belongs to the person who lost access: the author still has the thing itself."""
+    return stub.author != user
 
 
 def has_words_from_others(topic: Topic, user: str) -> bool:

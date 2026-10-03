@@ -19,10 +19,10 @@ import socket
 import ssl
 import struct
 import sys
-import uuid
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from http.cookiejar import CookieJar
 
 
@@ -180,7 +180,9 @@ def main() -> None:
     chris_password = args.user1_password or env.get("USER1_PASSWORD")
     karin_password = args.user2_password or env.get("USER2_PASSWORD")
     if not chris_password or not karin_password:
-        raise SystemExit("FAIL set SMOKE_USER1_PASSWORD and SMOKE_USER2_PASSWORD (or --user1-password/--user2-password)")
+        raise SystemExit(
+            "FAIL set SMOKE_USER1_PASSWORD and SMOKE_USER2_PASSWORD (or --user1-password/--user2-password)"
+        )
     marker = uuid.uuid4().hex[:8]
     secret = f"deploy-check-body-only-chris-should-see-this-before-open-{marker}"
     title = f"Deploy check {marker}"
@@ -247,7 +249,7 @@ def main() -> None:
                 if not extra:
                     break
                 karin_rest += extra
-        except (TimeoutError, socket.timeout):
+        except TimeoutError:
             pass
         karin_sock.settimeout(15)
         ws_send(karin_sock, {"type": "chat", "body": "after revoke"})

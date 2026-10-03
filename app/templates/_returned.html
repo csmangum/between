@@ -1,0 +1,29 @@
+{# Stubs: what someone keeps after a page they had opened returned to its author's desk. Never a body. #}
+{% macro item(s) %}
+  <li class="returned-item">
+    <span class="returned-title">{% if s.kind == 'comment' %}A note{% elif s.kind == 'topic' %}{{ s.topic_title }}{% else %}{{ s.title or "Untitled writing" }}{% endif %}</span>
+    <span class="returned-meta">
+      {% if s.opened_at %}open between you from {{ s.opened_at|when_soft }} · {% endif %}
+      {% if s.actor == s.author %}
+        {% if s.kind == 'topic' %}
+          when {{ display_for(s.author) }} returned it to their desk {{ s.withdrawn_at|when_soft }}
+        {% else %}
+          {{ display_for(s.author) }} returned it to their desk {{ s.withdrawn_at|when_soft }}
+        {% endif %}
+      {% else %}
+        returned to {{ display_for(s.author) }}'s desk {{ s.withdrawn_at|when_soft }}, when you returned the topic
+      {% endif %}
+    </span>
+  </li>
+{% endmacro %}
+
+{% macro block(stubs, author_name) %}
+  {% if stubs %}
+    <section class="returned">
+      <p class="meta">Returned to {{ author_name }}'s desk</p>
+      <ul class="returned-list">
+        {% for s in stubs %}{{ item(s) }}{% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+{% endmacro %}

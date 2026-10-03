@@ -1,13 +1,16 @@
 {% extends "base.html" %}
+{% from "_returned.html" import block as returned_block, item as returned_item %}
+{% from "_search_form.html" import search_form %}
 {% block title %}Kept · {{ app_name }}{% endblock %}
 {% block body %}
 <section class="hero">
   <h1>What you keep</h1>
-  <p class="lede">Your private pages, and everything both of you chose to open. Sealed offers are not here yet — an unopened letter is not part of the record.</p>
+  <p class="lede">Your private pages, and everything both of you chose to open. Sealed offers are not here yet — an unopened letter is not part of the record. What was open and then returned stays as a line, not a page.</p>
   <div class="actions">
     <a class="btn" href="/export.md">Take a Markdown copy</a>
     <a class="btn ghost" href="/export.json">Take a JSON copy</a>
   </div>
+  {{ search_form('') }}
 </section>
 
 {% for t in topics %}
@@ -19,6 +22,7 @@
       {% if t.share_status == 'shared' and t.accepted_at %}
         <span class="kept-since"> · opened together {{ t.accepted_at|when_soft }}</span>
       {% endif %}
+      · <a class="read-link" href="/topics/{{ t.id }}/read">Read it through</a>
     </p>
 
     {% for w in t.writings %}
@@ -26,6 +30,8 @@
         <article class="writing">
           <div class="author-chip">
             {{ display_for(w.author) }} · {{ w.created_at|when_soft }}
+            {% set read = w.body|reading_time %}
+            {% if read %}· <span class="reading-time">{{ read }}</span>{% endif %}
             {% if w.share_status == 'shared' and w.accepted_at %}
               · kept {{ w.accepted_at|when_soft }}
             {% endif %}
@@ -40,7 +46,7 @@
       {% if loop.first %}<div class="comments"><p class="meta">Notes</p>{% endif %}
       <div class="comment">
         <div class="author-chip">{{ display_for(c.author) }} · {{ c.created_at|when_soft }}</div>
-        <div class="body">{{ c.body }}</div>
+        <div class="body prose compact">{{ c.body|md|safe }}</div>
       </div>
       {% if loop.last %}</div>{% endif %}
     {% endfor %}
@@ -51,13 +57,29 @@
         {% for m in t.messages %}
           <div class="comment">
             <div class="author-chip">{{ display_for(m.author) }} · {{ m.created_at|when_soft }}</div>
-            <div class="body">{{ m.body }}</div>
+            <div class="body prose compact">{{ m.body|md|safe }}</div>
           </div>
         {% endfor %}
       </div>
     {% endif %}
+
+    {{ returned_block(returned_by_topic.get(t.id, []), other) }}
   </section>
 {% else %}
-  <p class="empty">Nothing kept yet. Begin on your desk; what you both open will gather here.</p>
+  {% if not returned_gone %}
+    <p class="empty">Nothing kept yet. Begin on your desk; what you both open will gather here.</p>
+  {% endif %}
 {% endfor %}
+
+{% if returned_gone %}
+  <section class="archive-topic returned-gone">
+    <h2>Returned to {{ other }}'s desk</h2>
+    <p class="meta">Topics you opened together that are theirs again. The titles and the dates stay; the pages do not.</p>
+    {% for group in returned_gone %}
+      <ul class="returned-list">
+        {% for s in group %}{{ returned_item(s) }}{% endfor %}
+      </ul>
+    {% endfor %}
+  </section>
+{% endif %}
 {% endblock %}

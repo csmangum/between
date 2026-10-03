@@ -70,15 +70,43 @@ data/
 
 The markdown mirrors are a convenience so the boundary is visible on disk. `MARKDOWN_MIRROR=false` keeps everything in SQLite only.
 
-Archive and export only include what *you* are allowed to read: your private pages plus anything both of you accepted.
+What you are still typing is kept in your own browser's local storage until the server confirms it was saved, so a dropped connection or an expired session does not lose the page. It never leaves the device, and it is cleared once the words are on your desk.
+
+Times are shown on your clock, not the server's. Exports are labeled UTC.
+
+## Writing
+
+Pages are Markdown. The desk gives you a toolbar and shortcuts (Ctrl/⌘+B, I, K), continues lists and quotes when you press Enter, indents a list with Tab, counts words, and can show the page as it will be kept while you type — the preview is drawn by the server with the same renderer and nothing is stored. **Just the page** hides the rest of the room; Esc brings it back. Everything works as a plain textarea when scripts are off.
+
+Beyond the usual Markdown, the room renders straight quotes and dashes as typographer's quotes and dashes, footnotes (`[^1]` … `[^1]: the note`), definition lists (a term, then a line starting with `: `), and abbreviations (`*[HTML]: HyperText Markup Language`). Images are reduced to their alt text; links open in a new tab.
+
+Archive and export only include what *you* are allowed to read: your private pages plus anything both of you accepted. If something you had opened is returned to the other person's desk, you keep a line — its title, when it was opened, when it was returned — never the page. Nothing is kept for an offer that was never opened.
+
+## Returning to it
+
+**Find**, on the Kept page, searches every topic, page, note and margin line you may read. The first letters of a word are enough. It answers with the same rule as the archive — nothing sealed, nothing on the other desk — and never hints that a hidden page matched. Each hit opens the topic's reading view at the exact place.
+
+**Read it through**, linked from every topic you can open, lays the topic out as a document: pages and notes in the order they were written, a contents list, a word count and reading time, the margin at the end while the topic is shared. Nothing opens from there; sealed things are counted and pointed back to the topic page. It prints cleanly.
 
 ## What the other person can see before opening
 
 The title of a sealed topic or writing, a count of sealed offers waiting, and — inside a shared topic — that you are in the margin and typing. Nothing about anything private, not even that it exists.
 
+## The room itself
+
+Two palettes: the dark room and paper. The app follows your system by default; the round button in the top bar (and on the door) pins a choice in that browser. Nothing about the choice leaves your machine.
+
+Writing fields grow with the words. Under every Markdown field there is a small toolbar: **Write / Preview** (the preview is drawn by the server with the same renderer the page uses, and nothing is stored), a running word count with a reading time, and **Write in full**, which gives the page the whole screen until you press Esc.
+
+A half-written page is kept in your own browser, for your own name, and picked up again when you come back. It is forgotten the moment you save it, or when you press Leave. It is never sent anywhere.
+
+Each writing shows how long it asks of its reader. A topic with several writings gets a short contents list. Soft times like "yesterday · 14:10" carry the exact moment on hover.
+
 ## Presence and drafts
 
-On a shared topic, the live margin shows who is in the room and who is typing.
+On a shared topic, the live margin shows who is in the room and who is typing. Lines from the same person a few minutes apart sit together under one name. If you have scrolled up when something arrives, a small pill points to it; if the tab is in the background, its title counts what came in.
+
+The only notification is the **Waiting** badge in the header. It updates on its own, and the page you are looking at says in one line when the other person offers, opens, leaves unopened or returns something there. The margin never notifies.
 
 **Draft a reply** is optional and off by default. It needs a model key in `.env` **and** both people to allow it from their desk. When someone asks for a draft, what that person can already read on the topic — including the other person's opened pages and recent margin lines — is sent to the configured provider. Private pages never are. Either person can withdraw at any time.
 
@@ -90,11 +118,17 @@ XAI_API_KEY=xai-...
 # AGENT_MODEL=llama3.2
 ```
 
-## Tests
+## Tests and checks
 
 ```bash
-.venv/bin/pytest -q
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pytest
+.venv/bin/ruff check . && .venv/bin/ruff format --check .
+.venv/bin/mypy
 ```
+
+The same four commands run in CI on every pull request (`.github/workflows/ci.yml`). Configuration lives in `pyproject.toml`.
 
 ## What this is not
 

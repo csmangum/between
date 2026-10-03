@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import auth
-from app.main import _safe_return
+from app.routes.auth import _safe_return
 
 ADMIN_PASSWORD = "op-secret-value"
 

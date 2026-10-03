@@ -4,6 +4,7 @@
   const input = document.getElementById("chat-body");
   const presence = document.getElementById("presence");
   const limit = document.getElementById("chat-limit");
+  const newPill = document.getElementById("chat-new");
   if (!log || !form || !input || !presence) return;
   const config = {
     topicId: log.dataset.topicId,
@@ -13,7 +14,9 @@
   if (!config.topicId || !config.me) return;
 
   const maxLength = 4000;
+  const groupWindowMs = 5 * 60 * 1000;
   const proto = location.protocol === "https:" ? "wss" : "ws";
+  const baseTitle = document.title;
   let ws = null;
   let typingTimer = null;
   let typingOn = false;
@@ -22,6 +25,8 @@
   const pending = [];
   const pendingBubbles = [];
   let reconnectTimer = null;
+  let unseenBelow = 0;
+  let unseenWhileAway = 0;
 
   function joinNames(names) {
     if (names.length <= 1) return names[0] || "";
@@ -29,19 +34,241 @@
     return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
   }
 
+  /* Scroll position and what has not been seen yet */
+
+  function nearBottom() {
+    return log.scrollHeight - log.scrollTop - log.clientHeight < 48;
+  }
+
+  function scrollToEnd() {
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function showPill() {
+    if (!newPill) return;
+    newPill.textContent = unseenBelow === 1 ? "A new line below" : `${unseenBelow} new lines below`;
+    newPill.hidden = false;
+  }
+
+  function hidePill() {
+    unseenBelow = 0;
+    if (newPill) newPill.hidden = true;
+  }
+
+  function markTitle() {
+    document.title = unseenWhileAway ? `(${unseenWhileAway}) ${baseTitle}` : baseTitle;
+  }
+
+  log.addEventListener("scroll", () => {
+    if (nearBottom()) hidePill();
+  });
+  if (newPill) {
+    newPill.addEventListener("click", () => {
+      log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
+      hidePill();
+    });
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      unseenWhileAway = 0;
+      markTitle();
+    }
+  });
+
+  /* Bubbles */
+
+  function lastBubble() {
+    const bubbles = log.querySelectorAll(".bubble");
+    return bubbles.length ? bubbles[bubbles.length - 1] : null;
+  }
+
+  const BLOCKED_MARKUP_TAGS = new Set(["IFRAME", "MATH", "OBJECT", "SCRIPT", "STYLE", "SVG", "TEMPLATE"]);
+
+  function createSafeElement(tag) {
+    switch (tag) {
+      case "A":
+        return document.createElement("a");
+      case "ABBR":
+        return document.createElement("abbr");
+      case "BLOCKQUOTE":
+        return document.createElement("blockquote");
+      case "BR":
+        return document.createElement("br");
+      case "CODE":
+        return document.createElement("code");
+      case "DD":
+        return document.createElement("dd");
+      case "DIV":
+        return document.createElement("div");
+      case "DL":
+        return document.createElement("dl");
+      case "DT":
+        return document.createElement("dt");
+      case "EM":
+        return document.createElement("em");
+      case "H1":
+        return document.createElement("h1");
+      case "H2":
+        return document.createElement("h2");
+      case "H3":
+        return document.createElement("h3");
+      case "H4":
+        return document.createElement("h4");
+      case "HR":
+        return document.createElement("hr");
+      case "LI":
+        return document.createElement("li");
+      case "OL":
+        return document.createElement("ol");
+      case "P":
+        return document.createElement("p");
+      case "PRE":
+        return document.createElement("pre");
+      case "SUB":
+        return document.createElement("sub");
+      case "SUP":
+        return document.createElement("sup");
+      case "TABLE":
+        return document.createElement("table");
+      case "TBODY":
+        return document.createElement("tbody");
+      case "TD":
+        return document.createElement("td");
+      case "TH":
+        return document.createElement("th");
+      case "THEAD":
+        return document.createElement("thead");
+      case "TR":
+        return document.createElement("tr");
+      case "UL":
+        return document.createElement("ul");
+      case "STRONG":
+        return document.createElement("strong");
+      default:
+        return null;
+    }
+  }
+
+  function appendSafeMarkup(target, markup) {
+    const parents = [target];
+    let blockedTag = null;
+    const decodeText = (text) => text.replace(/&(?:#(x[0-9a-f]+|[0-9]+)|(amp|lt|gt|quot|apos|nbsp));/gi, (entity, numeric, named) => {
+      if (named) {
+        return { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: "\u00a0" }[named.toLowerCase()];
+      }
+      const point = numeric[0].toLowerCase() === "x" ? Number.parseInt(numeric.slice(1), 16) : Number.parseInt(numeric, 10);
+      return point <= 0x10ffff ? String.fromCodePoint(point) : "\uFFFD";
+    });
+    const tokens = markup.match(/<[^>]*>|[^<]+|</g) || [];
+    for (const token of tokens) {
+      if (!token.startsWith("<") || token === "<") {
+        if (!blockedTag) parents[parents.length - 1].append(document.createTextNode(decodeText(token)));
+        continue;
+      }
+      const match = token.match(/^<\s*(\/?)\s*([a-z][a-z0-9]*)\b([^>]*)>/i);
+      if (!match) continue;
+      const [, closing, rawTag, attributes] = match;
+      const tag = rawTag.toUpperCase();
+      if (blockedTag) {
+        if (tag === blockedTag && closing) blockedTag = null;
+        continue;
+      }
+      if (BLOCKED_MARKUP_TAGS.has(tag) && !closing) {
+        blockedTag = tag;
+        continue;
+      }
+      if (closing) {
+        const index = parents.map((parent) => parent.tagName).lastIndexOf(tag);
+        if (index > 0) parents.length = index;
+        continue;
+      }
+      const copy = createSafeElement(tag);
+      if (!copy) continue;
+      const attribute = (name) => {
+        const found = attributes.match(new RegExp(`(?:^|\\s)${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i"));
+        return found ? decodeText(found[1] ?? found[2] ?? found[3]) : null;
+      };
+      if (tag === "A") {
+        const href = attribute("href");
+        if (href) {
+          try {
+            const url = new URL(href, location.href);
+            if (["http:", "https:", "mailto:"].includes(url.protocol)) {
+              copy.setAttribute("href", url.href);
+              if (url.protocol !== "mailto:" && url.origin !== location.origin) {
+                copy.setAttribute("target", "_blank");
+                copy.setAttribute("rel", "noopener noreferrer");
+              }
+            }
+          } catch (_) {
+            /* Ignore malformed links. */
+          }
+        }
+        const title = attribute("title");
+        if (title) copy.setAttribute("title", title);
+      } else if (tag === "ABBR") {
+        const title = attribute("title");
+        if (title) copy.setAttribute("title", title);
+      } else if (tag === "LI" || tag === "SUP") {
+        const id = attribute("id");
+        if (id && /^fn(ref)?:[A-Za-z0-9_.:-]+$/.test(id)) copy.id = id;
+      }
+      const classes = (attribute("class") || "").split(/\s+/);
+      const allowedClasses = tag === "DIV" ? ["footnote"] : tag === "A" ? ["footnote-ref", "footnote-backref"] : [];
+      classes.filter((name) => allowedClasses.includes(name)).forEach((name) => copy.classList.add(name));
+      parents[parents.length - 1].append(copy);
+      if (!["BR", "HR"].includes(tag) && !/\/\s*>$/.test(token)) parents.push(copy);
+    }
+  }
+
+  function setTimestamp(element, msg) {
+    element.textContent = "";
+    element.append(`${msg.display} · `);
+    if (window.Between && msg.created_at && !Number.isNaN(Date.parse(msg.created_at))) {
+      element.append(window.Between.timeElement(msg.created_at, "soft"));
+    } else {
+      element.append(msg.created_at || "just now");
+    }
+  }
+
   function addBubble(msg, pendingMessage) {
+    const mine = msg.author === config.me;
+    const wasNearBottom = nearBottom();
+    const previous = lastBubble();
+    const now = msg.created_at_epoch_ms || Date.now();
     const el = document.createElement("div");
-    el.className = "bubble" + (msg.author === config.me ? " mine" : "");
+    el.className = "bubble" + (mine ? " mine" : "");
+    el.dataset.author = msg.author;
+    el.dataset.at = String(now);
+    if (
+      previous &&
+      previous.dataset.author === msg.author &&
+      now - Number(previous.dataset.at || 0) < groupWindowMs
+    ) {
+      el.classList.add("cont");
+    }
     if (pendingMessage) el.classList.add("pending");
     const who = document.createElement("div");
     who.className = "who";
-    who.textContent = `${msg.display} · ${msg.created_at}`;
+    setTimestamp(who, msg);
     const body = document.createElement("div");
-    body.textContent = msg.body;
+    body.className = "prose compact";
+    if (typeof msg.html === "string") appendSafeMarkup(body, msg.html);
+    else body.textContent = msg.body;
     el.append(who, body);
     log.appendChild(el);
-    log.scrollTop = log.scrollHeight;
     if (pendingMessage) pendingBubbles.push({ body: msg.body, el });
+
+    if (mine || wasNearBottom) {
+      scrollToEnd();
+    } else {
+      unseenBelow += 1;
+      showPill();
+    }
+    if (!mine && document.hidden) {
+      unseenWhileAway += 1;
+      markTitle();
+    }
   }
 
   function settlePending(msg) {
@@ -50,10 +277,26 @@
     if (index === -1) return false;
     const item = pendingBubbles.splice(index, 1)[0];
     item.el.classList.remove("pending");
+    const serverEpoch = msg.created_at_epoch_ms;
+    if (serverEpoch) {
+      item.el.dataset.at = String(serverEpoch);
+      item.el.classList.remove("cont");
+      const previous = item.el.previousElementSibling;
+      if (
+        previous &&
+        previous.classList.contains("bubble") &&
+        previous.dataset.author === msg.author &&
+        serverEpoch - Number(previous.dataset.at || 0) < groupWindowMs
+      ) {
+        item.el.classList.add("cont");
+      }
+    }
     const who = item.el.querySelector(".who");
-    if (who) who.textContent = `${msg.display} · ${msg.created_at}`;
+    if (who) setTimestamp(who, msg);
     return true;
   }
+
+  /* Presence */
 
   function showPresence(msg) {
     const here = (msg.here || []).map((person) => person.display).filter(Boolean);
@@ -77,6 +320,8 @@
     typingOn = on;
     ws.send(JSON.stringify({ type: "typing", on }));
   }
+
+  /* The line to the room */
 
   function flushPending() {
     while (pending.length && ws && ws.readyState === 1) {
@@ -138,6 +383,8 @@
     });
   }
 
+  /* Composing */
+
   function updateLimit() {
     if (!limit) return;
     const left = maxLength - input.value.length;
@@ -188,6 +435,6 @@
     if (ws) ws.close();
   });
 
-  log.scrollTop = log.scrollHeight;
+  scrollToEnd();
   connect();
 })();
