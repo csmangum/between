@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -59,3 +60,35 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
 def logout(request: Request) -> Response:
     request.session.clear()
     return RedirectResponse("/login", status_code=303)
+
+
+def _safe_return(target: str) -> str:
+    target = target.strip()
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in target):
+        return "/"
+    try:
+        parts = urlsplit(target)
+    except ValueError:
+        return "/"
+    if parts.scheme or parts.netloc:
+        return "/"
+    path = parts.path or "/"
+    if not path.startswith("/") or path.startswith("//") or "\\" in path or "\\" in parts.query:
+        return "/"
+    safe_path = quote(path, safe="/-._~")
+    safe_query = urlencode(parse_qsl(parts.query, keep_blank_values=True))
+    return f"{safe_path}?{safe_query}" if safe_query else safe_path
+
+
+@router.post("/switch")
+def switch_profile(request: Request, username: str = Form(...), return_to: str = Form("")) -> Response:
+    user = auth.session_user(request.session)
+    if user and auth.switch_profile(request.session, username):
+        log.warning(
+            "admin switch from=%s to=%s ip=%s",
+            user,
+            request.session.get(auth.SESSION_USER),
+            client_ip(request),
+        )
+        return RedirectResponse(_safe_return(return_to), status_code=303)
+    return RedirectResponse("/" if user else "/login", status_code=303)

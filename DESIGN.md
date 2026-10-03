@@ -268,7 +268,7 @@ The markdown split (`local/` vs `shared/`) exists so the intended boundary is vi
 ## 11. Runtime
 
 - FastAPI + Jinja + one SQLite file
-- Session cookie auth, two hard-coded people
+- Session cookie auth for two people, plus an optional admin login that acts as either of them
 - WebSocket `/ws/topics/{id}` for chat, accepted only when the topic is `shared`
 - Server-sent events at `/events`, one stream per signed-in person, carrying only the sealed count and which topic the other person just acted on. Like the chat hub it lives in the process: run one worker.
 - Docker Compose for hosting; `run.sh` for a laptop
@@ -292,6 +292,7 @@ In scope for v1:
 - A returned page's line holds a title the other person had already read, and dates. It never holds a body, and it is shown only to the person who lost access
 - The process refuses to start with a missing or sample `SECRET_KEY`, or with sample passwords. `BETWEEN_DEV=1` relaxes only the key, for a laptop.
 - Passwords are stored as scrypt hashes (`USERn_PASSWORD_HASH`, from `python -m app.auth`). A plaintext `USERn_PASSWORD` still works and is hashed in memory at start.
+- An optional `admin` login exists only when `ADMIN_PASSWORD_HASH` or `ADMIN_PASSWORD` is set. It is not a third person. The session acts as one of the two and can switch. Changing the admin secret ends that session. Changing a person's password ends that person's own sessions and leaves an admin session in place. Unset, the name `admin` is refused like any other unknown login.
 - Login is throttled per address and per name with exponential backoff after three misses; every miss is logged.
 - Sessions: `SameSite=Strict`, `HttpOnly`, `Secure` under HTTPS, seven idle days (sliding), thirty days absolute, and a keyed fingerprint of the password hash so changing a password ends every session for that person.
 - Every response carries a strict CSP (`script-src 'self'`, `frame-ancestors 'none'`, `form-action 'self'`), `Referrer-Policy: same-origin`, `nosniff`, and `Cache-Control: no-store` on anything that is not a static file. HSTS when `HTTPS_ONLY`.

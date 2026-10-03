@@ -182,6 +182,7 @@ def ctx(request: Request, db: Session | None = None, **extra: Any) -> dict[str, 
     return {
         "request": request,
         "user": user,
+        "admin": bool(user) and auth.is_admin_session(request.session),
         "display": auth.display_for(user) if user else None,
         "other": next((p.display for name, p in people.items() if name != user), None) if user else None,
         "other_user": access.other_username(user) if user else None,
