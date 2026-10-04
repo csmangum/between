@@ -51,6 +51,6 @@ def test_load_env_keeps_dollars_strips_quotes_and_accepts_export(tmp_path: Path)
 def test_load_env_strips_crlf_and_does_not_run_values(tmp_path: Path):
     marker = tmp_path / "pwned"
     env_file = tmp_path / "crlf.env"
-    env_file.write_bytes(f"USER1_PASSWORD=\"horse\"\r\n$(touch {marker})=1\nSAFE=ok\r\n".encode())
+    env_file.write_bytes(f'USER1_PASSWORD="horse"\r\n$(touch {marker})=1\nSAFE=ok\r\n'.encode())
     assert _print_env(env_file, "USER1_PASSWORD", "SAFE") == ["USER1_PASSWORD=horse", "SAFE=ok"]
     assert not marker.exists()
