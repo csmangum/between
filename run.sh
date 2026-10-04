@@ -2,6 +2,46 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Password hashes contain `$`. Sourcing the file would expand those as shell variables.
+# One pair of matching quotes is removed, and a leading `export ` is ignored.
+load_env() {
+  local file="${1:-.env}"
+  local line key value
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "$line" == *=* ]] || continue
+    key="${line%%=*}"
+    value="${line#*=}"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    key="${key#export }"
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
+    [[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    if [[ ${#value} -ge 2 && ( "$value" == \"*\" || "$value" == \'*\' ) ]]; then
+      value="${value:1:${#value}-2}"
+    fi
+    printf -v "$key" '%s' "$value"
+    export "$key"
+  done < "$file"
+}
+
+# Tests call this to print selected keys from a file without starting the app.
+if [[ "${1:-}" == "--print-env-file" ]]; then
+  load_env "$2"
+  shift 2
+  for key in "$@"; do
+    if [[ -v $key ]]; then
+      printf '%s=%s\n' "$key" "${!key}"
+    else
+      printf '%s=\n' "$key"
+    fi
+  done
+  exit 0
+fi
+
 if [ ! -f .env ]; then
   cp .env.example .env
   key="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
@@ -16,10 +56,7 @@ if [ "$(stat -c '%a' .env 2>/dev/null || stat -f '%Lp' .env)" != "600" ]; then
   echo "warning: .env is readable by other users on this machine; run: chmod 600 .env" >&2
 fi
 
-set -a
-# shellcheck disable=SC1091
-source .env
-set +a
+load_env
 
 if [ ! -d .venv ]; then
   python3 -m venv .venv

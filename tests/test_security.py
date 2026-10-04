@@ -156,6 +156,11 @@ def test_password_hash_roundtrip():
     assert not auth.check_password("anything", "not-a-hash")
 
 
+def test_malformed_password_hash_returns_false():
+    encoded = "scrypt$16384$8$1$valid-salt$a"
+    assert not auth.check_password("anything", encoded)
+
+
 def test_password_hash_cli_does_not_require_secret_key():
     env = os.environ.copy()
     env.pop("SECRET_KEY", None)

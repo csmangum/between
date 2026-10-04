@@ -44,7 +44,7 @@ To put it on a small Google Cloud VM with HTTPS, follow [deploy/gcp/RUNBOOK.md](
 
 ## Accounts
 
-Only two people exist, set in `.env`:
+Two people share the room, set in `.env`. An optional admin login can act as either of them. It is not a third person, and it does not exist until you set it.
 
 | Variable | Meaning |
 |---|---|
@@ -52,9 +52,10 @@ Only two people exist, set in `.env`:
 | `USER1_DISPLAY` / `USER2_DISPLAY` | name shown in the UI |
 | `USER1_PASSWORD_HASH` / `USER2_PASSWORD_HASH` | scrypt hash from `python -m app.auth` (preferred) |
 | `USER1_PASSWORD` / `USER2_PASSWORD` | plaintext alternative, hashed in memory at start |
+| `ADMIN_PASSWORD_HASH` / `ADMIN_PASSWORD` | optional. When set, the name `admin` can sign in and switch between the two people. Off when both are unset. |
 | `SECRET_KEY` | signs the session cookie; at least 32 random characters |
 
-The app refuses to start with a sample `SECRET_KEY` or sample passwords. Changing a person's password signs that person out everywhere.
+The app refuses to start with a sample `SECRET_KEY` or sample passwords. Changing a person's password signs that person out everywhere. Changing the admin secret signs the admin session out and leaves the two people signed in. An admin session keeps working if only one person's password changes.
 
 Login is throttled after three misses. Sessions last seven idle days, thirty at most.
 
