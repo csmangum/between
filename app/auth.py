@@ -58,8 +58,17 @@ def _b64(raw: bytes) -> str:
 
 
 def _unb64(text: str) -> bytes:
+    if (
+        not text
+        or not text.isascii()
+        or any(char not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_" for char in text)
+    ):
+        raise ValueError("invalid base64")
     padded = text + "=" * (-len(text) % 4)
-    return base64.urlsafe_b64decode(padded.encode("ascii"))
+    raw = base64.b64decode(padded.encode("ascii"), altchars=b"-_", validate=True)
+    if _b64(raw) != text:
+        raise ValueError("invalid base64")
+    return raw
 
 
 def hash_password(password: str, salt: bytes | None = None) -> str:
@@ -77,23 +86,43 @@ def hash_password(password: str, salt: bytes | None = None) -> str:
     return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${_b64(salt)}${_b64(digest)}"
 
 
-def check_password(password: str, encoded: str) -> bool:
+def _parse_password_hash(encoded: str) -> tuple[int, int, int, bytes, bytes] | None:
     try:
-        scheme, n, r, p, salt, expected = encoded.split("$")
-        if scheme != "scrypt":
-            return False
+        scheme, n_text, r_text, p_text, salt, expected = encoded.split("$")
+        parameters = (n_text, r_text, p_text)
+        if scheme != "scrypt" or not all(value.isascii() and value.isdecimal() for value in parameters):
+            return None
+        n, r, p = (int(value) for value in parameters)
+        if n <= 1 or n & (n - 1) or r <= 0 or p <= 0:
+            return None
+        if 128 * n * r + 256 * r * p > SCRYPT_MAXMEM:
+            return None
+        salt_bytes, digest = _unb64(salt), _unb64(expected)
+    except (ValueError, TypeError, UnicodeError, OverflowError):
+        return None
+    if len(salt_bytes) != 16 or len(digest) != SCRYPT_LEN:
+        return None
+    return n, r, p, salt_bytes, digest
+
+
+def check_password(password: str, encoded: str) -> bool:
+    parsed = _parse_password_hash(encoded)
+    if parsed is None:
+        return False
+    n, r, p, salt, expected = parsed
+    try:
         digest = hashlib.scrypt(
             password.encode("utf-8"),
-            salt=_unb64(salt),
-            n=int(n),
-            r=int(r),
-            p=int(p),
+            salt=salt,
+            n=n,
+            r=r,
+            p=p,
             dklen=SCRYPT_LEN,
             maxmem=SCRYPT_MAXMEM,
         )
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return False
-    return hmac.compare_digest(digest, _unb64(expected))
+    return hmac.compare_digest(digest, expected)
 
 
 def _deterministic_salt(username: str) -> bytes:
@@ -111,7 +140,7 @@ def _encoded_password(prefix: str, username: str, *, required: bool) -> str | No
     encoded = os.getenv(f"{prefix}_PASSWORD_HASH", "").strip()
     raw = os.getenv(f"{prefix}_PASSWORD", "").strip()
     if encoded:
-        if not encoded.startswith("scrypt$"):
+        if _parse_password_hash(encoded) is None:
             config.refuse(f"{prefix}_PASSWORD_HASH is not a value produced by `python -m app.auth`.")
         return encoded
     if not raw:

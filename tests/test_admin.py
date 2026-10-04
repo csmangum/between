@@ -211,8 +211,16 @@ def test_sample_admin_password_is_refused(monkeypatch: pytest.MonkeyPatch):
         auth._ADMIN = None
 
 
-def test_bad_admin_hash_is_refused(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("ADMIN_PASSWORD_HASH", "not-a-hash")
+@pytest.mark.parametrize(
+    "encoded",
+    [
+        "not-a-hash",
+        "scrypt$16384$8$1$valid-salt$a",
+        "scrypt$bad$8$1$MDEyMzQ1Njc4OWFiY2RlZg$" + auth._b64(b"x" * auth.SCRYPT_LEN),
+    ],
+)
+def test_bad_admin_hash_is_refused(monkeypatch: pytest.MonkeyPatch, encoded: str):
+    monkeypatch.setenv("ADMIN_PASSWORD_HASH", encoded)
     auth._ADMIN_LOADED = False
     auth._ADMIN = None
     try:
